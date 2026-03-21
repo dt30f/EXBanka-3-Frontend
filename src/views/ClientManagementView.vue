@@ -10,6 +10,7 @@ const editForm = ref<UpdateClientPayload & { datumRodjenjaStr: string }>({
   ime: '', prezime: '', datumRodjenja: 0, datumRodjenjaStr: '',
   pol: 'M', email: '', brojTelefona: '', adresa: '',
 })
+const editPermissions = ref<string[]>([])
 const editError = ref('')
 const editLoading = ref(false)
 
@@ -36,6 +37,7 @@ async function openEdit(clientId: string) {
       brojTelefona: detail.brojTelefona || '',
       adresa: detail.adresa || '',
     }
+    editPermissions.value = detail.permissions?.map(p => p.name) ?? ['clientBasic']
     editError.value = ''
   } catch {
     store.error = 'Greška pri učitavanju podataka klijenta.'
@@ -70,6 +72,7 @@ async function handleSave() {
       adresa: editForm.value.adresa,
     }
     await store.updateClient(editingClient.value.id, payload)
+    await store.updateClientPermissions(editingClient.value.id, editPermissions.value)
     editingClient.value = null
   } catch (e: any) {
     const msg = e.response?.data?.message || e.response?.data?.error || ''
@@ -214,6 +217,20 @@ onMounted(() => store.fetchClients())
         <div class="form-group">
           <label>Adresa</label>
           <input v-model="editForm.adresa" />
+        </div>
+
+        <div class="form-group">
+          <label>Dozvole</label>
+          <div style="display:flex;gap:16px;margin-top:6px">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+              <input type="checkbox" value="clientBasic" v-model="editPermissions" />
+              clientBasic
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+              <input type="checkbox" value="clientTrading" v-model="editPermissions" />
+              clientTrading
+            </label>
+          </div>
         </div>
 
         <p v-if="editError" class="global-error">{{ editError }}</p>

@@ -50,6 +50,10 @@ export const useClientStore = defineStore('client', () => {
     await fetchClients()
   }
 
+  async function updateClientPermissions(id: string, permissions: string[]) {
+    await clientManagementApi.updatePermissions(id, permissions)
+  }
+
   function setFilters(newFilters: Partial<ClientFilters>) {
     Object.assign(filters.value, newFilters)
     page.value = 1
@@ -71,6 +75,7 @@ export const useClientStore = defineStore('client', () => {
     fetchClients,
     getClient,
     updateClient,
+    updateClientPermissions,
     setFilters,
     clearFilters,
   }

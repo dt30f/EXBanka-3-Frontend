@@ -20,6 +20,7 @@ export interface ClientDetail {
   brojTelefona: string
   adresa: string
   aktivan: boolean
+  permissions?: { id: string; name: string; description: string }[]
 }
 
 export interface UpdateClientPayload {
@@ -55,4 +56,7 @@ export const clientManagementApi = {
   update: (id: string, data: UpdateClientPayload) => api.put(`/clients/${id}`, data),
 
   create: (data: CreateClientPayload) => api.post('/clients', data),
+
+  updatePermissions: (id: string, permissions: string[]) =>
+    api.put(`/clients/${id}/permissions`, { permission_names: permissions }),
 }
