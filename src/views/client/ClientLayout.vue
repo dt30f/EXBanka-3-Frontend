@@ -1,33 +1,31 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter, RouterLink, useRoute } from 'vue-router'
 import { useClientAuthStore } from '../../stores/clientAuth'
 
 const router = useRouter()
 const route = useRoute()
 const clientAuth = useClientAuthStore()
+const paymentsOpen = ref(true)
 
 function logout() {
   clientAuth.logout()
   router.push('/client/login')
 }
 
-const navItems = [
-  { to: '/client/dashboard', label: 'Dashboard', icon: '⬡' },
-  { to: '/client/accounts', label: 'Računi', icon: '◈' },
-  { to: '/client/transfers', label: 'Transferi', icon: '⇄' },
-  { to: '/client/exchange', label: 'Menjačnica', icon: '↻' },
-  { to: '/client/recipients', label: 'Primaoci', icon: '◉' },
-  { to: '/client/payments', label: 'Plaćanja', icon: '▤' },
-]
+function isActive(path: string) {
+  return route.path === path || route.path.startsWith(path + '/')
+}
 
-function isActive(to: string) {
-  return route.path === to || route.path.startsWith(to + '/')
+function isPaymentSection() {
+  return route.path.startsWith('/client/payments') ||
+    route.path.startsWith('/client/transfers') ||
+    route.path.startsWith('/client/recipients')
 }
 </script>
 
 <template>
   <div class="client-layout">
-    <!-- Sidebar -->
     <aside class="client-sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">EX<span>Banka</span></div>
@@ -35,16 +33,39 @@ function isActive(to: string) {
       </div>
 
       <nav class="sidebar-nav">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="sidebar-link"
-          :class="{ active: isActive(item.to) }"
-        >
-          <span class="sidebar-icon">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
+        <RouterLink to="/client/dashboard" class="sidebar-link" :class="{ active: isActive('/client/dashboard') }">
+          <span class="sidebar-icon">⬡</span><span>Dashboard</span>
         </RouterLink>
+
+        <RouterLink to="/client/accounts" class="sidebar-link" :class="{ active: isActive('/client/accounts') }">
+          <span class="sidebar-icon">◈</span><span>Računi</span>
+        </RouterLink>
+
+        <RouterLink to="/client/exchange" class="sidebar-link" :class="{ active: isActive('/client/exchange') }">
+          <span class="sidebar-icon">↻</span><span>Menjačnica</span>
+        </RouterLink>
+
+        <!-- Plaćanja with submenu -->
+        <button class="sidebar-link sidebar-group-btn" :class="{ active: isPaymentSection() }" @click="paymentsOpen = !paymentsOpen">
+          <span class="sidebar-icon">▤</span>
+          <span style="flex:1;text-align:left">Plaćanja</span>
+          <span class="sidebar-arrow" :class="{ open: paymentsOpen }">›</span>
+        </button>
+
+        <div v-if="paymentsOpen" class="sidebar-submenu">
+          <RouterLink to="/client/payments/new" class="sidebar-sublink" :class="{ active: isActive('/client/payments/new') }">
+            Novo plaćanje
+          </RouterLink>
+          <RouterLink to="/client/transfers" class="sidebar-sublink" :class="{ active: isActive('/client/transfers') }">
+            Prenos
+          </RouterLink>
+          <RouterLink to="/client/recipients" class="sidebar-sublink" :class="{ active: isActive('/client/recipients') }">
+            Primaoci plaćanja
+          </RouterLink>
+          <RouterLink to="/client/payments" class="sidebar-sublink" :class="{ active: route.path === '/client/payments' }">
+            Pregled plaćanja
+          </RouterLink>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -61,7 +82,6 @@ function isActive(to: string) {
       </div>
     </aside>
 
-    <!-- Main content -->
     <main class="client-main">
       <RouterView />
     </main>
@@ -69,156 +89,69 @@ function isActive(to: string) {
 </template>
 
 <style scoped>
-.client-layout {
-  display: flex;
-  min-height: 100vh;
-}
+.client-layout { display: flex; min-height: 100vh; }
 
-/* Sidebar */
 .client-sidebar {
   width: 260px;
   background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  z-index: 50;
+  color: #fff; display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
 }
 
-.sidebar-header {
-  padding: 28px 24px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-}
+.sidebar-header { padding: 28px 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.sidebar-logo { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #fff; }
+.sidebar-logo span { color: #60a5fa; }
+.sidebar-subtitle { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 4px; }
 
-.sidebar-logo {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: #fff;
-}
-.sidebar-logo span {
-  color: #60a5fa;
-}
-
-.sidebar-subtitle {
-  font-size: 11px;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-top: 4px;
-}
-
-/* Navigation */
-.sidebar-nav {
-  flex: 1;
-  padding: 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+.sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 
 .sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 16px;
-  border-radius: 8px;
-  color: #94a3b8;
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.15s ease;
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 16px; border-radius: 8px;
+  color: #94a3b8; text-decoration: none;
+  font-size: 14px; font-weight: 500; transition: all 0.15s ease;
 }
+.sidebar-link:hover { color: #e2e8f0; background: rgba(255,255,255,0.06); text-decoration: none; }
+.sidebar-link.active { color: #fff; background: rgba(59,130,246,0.2); box-shadow: inset 3px 0 0 #3b82f6; }
+.sidebar-icon { width: 20px; text-align: center; font-size: 16px; }
 
-.sidebar-link:hover {
-  color: #e2e8f0;
-  background: rgba(255,255,255,0.06);
-  text-decoration: none;
+.sidebar-group-btn {
+  width: 100%; border: none; cursor: pointer; background: none;
+  font-family: inherit;
 }
-
-.sidebar-link.active {
-  color: #fff;
-  background: rgba(59, 130, 246, 0.2);
-  box-shadow: inset 3px 0 0 #3b82f6;
+.sidebar-arrow {
+  font-size: 14px; transition: transform 0.2s; color: #64748b;
 }
+.sidebar-arrow.open { transform: rotate(90deg); }
 
-.sidebar-icon {
-  width: 20px;
-  text-align: center;
-  font-size: 16px;
+.sidebar-submenu {
+  display: flex; flex-direction: column; gap: 1px;
+  padding-left: 20px; margin-bottom: 4px;
 }
-
-/* Footer / User */
-.sidebar-footer {
-  padding: 16px;
-  border-top: 1px solid rgba(255,255,255,0.08);
+.sidebar-sublink {
+  display: block; padding: 8px 16px 8px 28px; border-radius: 6px;
+  color: #64748b; text-decoration: none; font-size: 13px; font-weight: 500;
+  transition: all 0.15s; border-left: 2px solid transparent;
 }
+.sidebar-sublink:hover { color: #cbd5e1; background: rgba(255,255,255,0.04); text-decoration: none; }
+.sidebar-sublink.active { color: #93c5fd; border-left-color: #3b82f6; background: rgba(59,130,246,0.1); }
 
-.sidebar-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
+.sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); }
+.sidebar-user { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .sidebar-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 36px; height: 36px; border-radius: 50%;
   background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
 }
-
-.sidebar-user-info {
-  overflow: hidden;
-}
-
-.sidebar-user-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #e2e8f0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar-user-email {
-  font-size: 11px;
-  color: #64748b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+.sidebar-user-info { overflow: hidden; }
+.sidebar-user-name { font-size: 13px; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-user-email { font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-logout {
-  width: 100%;
-  padding: 8px;
-  border-radius: 6px;
-  background: rgba(255,255,255,0.06);
-  color: #94a3b8;
-  font-size: 13px;
-  border: 1px solid rgba(255,255,255,0.08);
-  transition: all 0.15s ease;
+  width: 100%; padding: 8px; border-radius: 6px;
+  background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.08); transition: all 0.15s ease;
 }
-.sidebar-logout:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.2);
-}
-
-/* Main content area */
-.client-main {
-  flex: 1;
-  margin-left: 260px;
-  background: #f8fafc;
-  min-height: 100vh;
-}
+.sidebar-logout:hover { background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.2); }
+.client-main { flex: 1; margin-left: 260px; background: #f8fafc; min-height: 100vh; }
 </style>

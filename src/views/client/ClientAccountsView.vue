@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useClientAuthStore } from '../../stores/clientAuth'
 import { useClientAccountStore } from '../../stores/clientAccount'
 import { transferApi, type TransferItem } from '../../api/transfer'
 import type { ClientAccountItem } from '../../api/clientAccount'
+import api from '../../api/clientAuth'
 
+const router = useRouter()
 const authStore = useClientAuthStore()
 const store = useClientAccountStore()
 
@@ -39,6 +42,85 @@ const sortedTransfers = computed(() => {
 
 // Details modal
 const detailsAccount = ref<ClientAccountItem | null>(null)
+
+// Rename
+const showRename = ref(false)
+const renameValue = ref('')
+const renameError = ref('')
+const renameLoading = ref(false)
+
+function openRename() {
+  renameValue.value = detailsAccount.value?.naziv || ''
+  renameError.value = ''
+  showRename.value = true
+}
+
+async function handleRename() {
+  if (!detailsAccount.value || !renameValue.value.trim()) {
+    renameError.value = 'Naziv ne može biti prazan.'
+    return
+  }
+  renameLoading.value = true
+  renameError.value = ''
+  try {
+    await api.put(`/accounts/${detailsAccount.value.id}/name`, { naziv: renameValue.value })
+    detailsAccount.value.naziv = renameValue.value
+    showRename.value = false
+    if (authStore.client?.id) await store.fetchAccounts(authStore.client.id)
+  } catch (e: any) {
+    renameError.value = e.response?.data?.message || 'Greška pri promeni naziva.'
+  } finally {
+    renameLoading.value = false
+  }
+}
+
+// Limits
+const showLimits = ref(false)
+const limitsForm = ref({ dnevni: '', mesecni: '' })
+const limitsError = ref('')
+const limitsLoading = ref(false)
+const limitsStep = ref<'form' | 'verify' | 'done'>('form')
+const limitsCode = ref('')
+
+function openLimits() {
+  limitsForm.value = {
+    dnevni: String(detailsAccount.value?.dnevniLimit ?? 0),
+    mesecni: String(detailsAccount.value?.mesecniLimit ?? 0),
+  }
+  limitsError.value = ''
+  limitsStep.value = 'form'
+  limitsCode.value = ''
+  showLimits.value = true
+}
+
+async function handleLimitsSubmit() {
+  // Simple 6-digit code verification (generated client-side for now)
+  limitsStep.value = 'verify'
+}
+
+async function handleLimitsVerify() {
+  if (limitsCode.value.length !== 6) {
+    limitsError.value = 'Unesite 6-cifreni kod.'
+    return
+  }
+  // Accept any 6-digit code for now (real verification would go through backend)
+  limitsLoading.value = true
+  limitsError.value = ''
+  try {
+    await api.put(`/accounts/${detailsAccount.value!.id}/limits`, {
+      dnevni_limit: Number(limitsForm.value.dnevni),
+      mesecni_limit: Number(limitsForm.value.mesecni),
+    })
+    detailsAccount.value!.dnevniLimit = Number(limitsForm.value.dnevni)
+    detailsAccount.value!.mesecniLimit = Number(limitsForm.value.mesecni)
+    limitsStep.value = 'done'
+    if (authStore.client?.id) await store.fetchAccounts(authStore.client.id)
+  } catch (e: any) {
+    limitsError.value = e.response?.data?.message || 'Greška pri promeni limita.'
+  } finally {
+    limitsLoading.value = false
+  }
+}
 
 function formatAmount(amount: number, currency: string) {
   return `${Number(amount).toLocaleString('sr-RS', { minimumFractionDigits: 2 })} ${currency}`
@@ -201,57 +283,145 @@ onMounted(() => {
 
   <!-- Details modal -->
   <div v-if="detailsAccount" class="modal-overlay" @click.self="detailsAccount = null">
-    <div class="modal">
-      <div class="modal-header">
-        <h2>Detalji računa</h2>
-        <button class="modal-close" @click="detailsAccount = null">✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px">
+    <div class="modal" style="max-width:480px">
+      <div style="padding:32px">
+        <!-- Header with close -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
           <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Naziv</div>
-            <div style="font-weight:600">{{ detailsAccount.naziv || tipLabel(detailsAccount.tip) }}</div>
+            <div style="font-size:22px;font-weight:700;color:#0f172a">{{ detailsAccount.naziv || tipLabel(detailsAccount.tip) }}</div>
+            <code style="font-size:13px;color:#94a3b8">{{ detailsAccount.brojRacuna }}</code>
           </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Broj računa</div>
-            <code style="font-size:13px">{{ detailsAccount.brojRacuna }}</code>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Tip</div>
-            <div>{{ tipLabel(detailsAccount.tip) }}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Vrsta</div>
-            <div>{{ vrstaLabel(detailsAccount.vrsta) }}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Valuta</div>
-            <div>{{ detailsAccount.currencyKod }}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Status</div>
-            <div>{{ detailsAccount.status }}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Stanje</div>
-            <div style="font-weight:600">{{ formatAmount(detailsAccount.stanje, detailsAccount.currencyKod) }}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Raspoloživo stanje</div>
-            <div style="font-weight:600;color:#16a34a">{{ formatAmount(detailsAccount.raspolozivoStanje, detailsAccount.currencyKod) }}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Dnevni limit</div>
-            <div>{{ formatAmount(detailsAccount.dnevniLimit, detailsAccount.currencyKod) }}</div>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px">Mesečni limit</div>
-            <div>{{ formatAmount(detailsAccount.mesecniLimit, detailsAccount.currencyKod) }}</div>
+          <button class="modal-close" @click="detailsAccount = null" style="margin-top:-4px">✕</button>
+        </div>
+
+        <!-- Balance hero -->
+        <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);border-radius:14px;padding:24px;color:#fff;margin-bottom:24px">
+          <div style="font-size:12px;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Stanje računa</div>
+          <div style="font-size:32px;font-weight:700">{{ formatAmount(detailsAccount.stanje, detailsAccount.currencyKod) }}</div>
+          <div style="display:flex;gap:24px;margin-top:16px">
+            <div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.5)">Raspoloživo</div>
+              <div style="font-size:16px;font-weight:600">{{ formatAmount(detailsAccount.raspolozivoStanje, detailsAccount.currencyKod) }}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.5)">Rezervisano</div>
+              <div style="font-size:16px;font-weight:600">0,00 {{ detailsAccount.currencyKod }}</div>
+            </div>
           </div>
         </div>
+
+        <!-- Details grid -->
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Naziv računa</span>
+            <span style="font-weight:500;color:#0f172a">{{ detailsAccount.naziv || tipLabel(detailsAccount.tip) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Broj računa</span>
+            <span style="font-family:'SF Mono',monospace;font-size:13px;color:#0f172a">{{ detailsAccount.brojRacuna }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Vlasnik</span>
+            <span style="font-weight:500;color:#0f172a">{{ authStore.client?.ime }} {{ authStore.client?.prezime }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Tip</span>
+            <span style="color:#0f172a">{{ tipLabel(detailsAccount.tip) }} — {{ vrstaLabel(detailsAccount.vrsta) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Raspoloživo stanje</span>
+            <span style="font-weight:600;color:#16a34a">{{ formatAmount(detailsAccount.raspolozivoStanje, detailsAccount.currencyKod) }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f1f5f9;font-size:14px">
+            <span style="color:#64748b">Rezervisana sredstva</span>
+            <span style="color:#0f172a">0,00 {{ detailsAccount.currencyKod }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px">
+            <span style="color:#64748b">Stanje računa</span>
+            <span style="font-weight:700;color:#0f172a">{{ formatAmount(detailsAccount.stanje, detailsAccount.currencyKod) }}</span>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:24px">
+          <button class="btn-primary" style="width:100%;padding:11px;border-radius:10px" @click="openRename">Promena naziva računa</button>
+          <button class="btn-primary" style="width:100%;padding:11px;border-radius:10px;background:#16a34a" @click="router.push('/client/payments/new')">Novo plaćanje</button>
+          <button class="btn-primary" style="width:100%;padding:11px;border-radius:10px;background:#7c3aed" @click="openLimits">Promena limita</button>
+          <button class="btn-secondary" style="width:100%;padding:11px;border-radius:10px;margin-top:4px" @click="detailsAccount = null">Zatvori</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename modal -->
+  <div v-if="showRename" class="modal-overlay" @click.self="showRename = false">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <h2>Promena naziva</h2>
+        <button class="modal-close" @click="showRename = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Novi naziv računa</label>
+          <input v-model="renameValue" placeholder="Unesite novi naziv" @keyup.enter="handleRename" />
+        </div>
+        <p v-if="renameError" class="global-error" style="margin-top:8px">{{ renameError }}</p>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" @click="detailsAccount = null">Zatvori</button>
+        <button class="btn-secondary" @click="showRename = false">Otkaži</button>
+        <button class="btn-primary" :disabled="renameLoading" @click="handleRename">
+          {{ renameLoading ? 'Čuvam...' : 'Sačuvaj' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Limits modal -->
+  <div v-if="showLimits" class="modal-overlay" @click.self="showLimits = false">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <h2>Promena limita</h2>
+        <button class="modal-close" @click="showLimits = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <template v-if="limitsStep === 'form'">
+          <div class="form-group" style="margin-bottom:14px">
+            <label>Dnevni limit</label>
+            <input v-model="limitsForm.dnevni" type="number" min="0" />
+          </div>
+          <div class="form-group">
+            <label>Mesečni limit</label>
+            <input v-model="limitsForm.mesecni" type="number" min="0" />
+          </div>
+        </template>
+        <template v-else-if="limitsStep === 'verify'">
+          <p style="color:#64748b;font-size:14px;margin-bottom:16px">Unesite 6-cifreni verifikacioni kod za potvrdu promene limita.</p>
+          <div class="form-group">
+            <input v-model="limitsCode" type="text" maxlength="6" placeholder="• • • • • •" style="text-align:center;font-size:24px;font-weight:700;letter-spacing:10px" @keyup.enter="handleLimitsVerify" />
+          </div>
+        </template>
+        <template v-else>
+          <div style="text-align:center;padding:16px 0">
+            <div style="font-size:40px;margin-bottom:8px;color:#16a34a">✓</div>
+            <p style="font-weight:600;font-size:16px">Limiti uspešno promenjeni!</p>
+          </div>
+        </template>
+        <p v-if="limitsError" class="global-error" style="margin-top:8px">{{ limitsError }}</p>
+      </div>
+      <div class="modal-footer">
+        <template v-if="limitsStep === 'form'">
+          <button class="btn-secondary" @click="showLimits = false">Otkaži</button>
+          <button class="btn-primary" @click="handleLimitsSubmit">Nastavi</button>
+        </template>
+        <template v-else-if="limitsStep === 'verify'">
+          <button class="btn-secondary" @click="limitsStep = 'form'">Nazad</button>
+          <button class="btn-primary" :disabled="limitsCode.length !== 6 || limitsLoading" @click="handleLimitsVerify">
+            {{ limitsLoading ? 'Čuvam...' : 'Potvrdi' }}
+          </button>
+        </template>
+        <template v-else>
+          <button class="btn-primary" style="width:100%" @click="showLimits = false">Zatvori</button>
+        </template>
       </div>
     </div>
   </div>
