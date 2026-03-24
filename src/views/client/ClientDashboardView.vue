@@ -6,6 +6,7 @@ import { useTransferStore } from '../../stores/transfer'
 import { usePaymentStore } from '../../stores/payment'
 import { useRecipientStore } from '../../stores/recipient'
 import { exchangeApi, type ExchangeRate } from '../../api/exchange'
+import { paymentApi } from '../../api/payment'
 
 const clientAuthStore = useClientAuthStore()
 const accountStore = useClientAccountStore()
@@ -68,6 +69,35 @@ function statusLabel(status: string) {
     case 'u_obradi': return 'U obradi'
     case 'stornirano': return 'Stornirano'
     default: return status
+  }
+}
+
+// --- Quick payment ---
+const qp = ref({ fromAccountId: '', recipientBroj: '', iznos: '' })
+const qpSuccess = ref(false)
+const qpError = ref('')
+const qpLoading = ref(false)
+
+async function submitQuickPayment() {
+  qpError.value = ''
+  qpSuccess.value = false
+  if (!qp.value.fromAccountId || !qp.value.recipientBroj || !qp.value.iznos) return
+  qpLoading.value = true
+  try {
+    await paymentApi.create({
+      racunPosiljaocaId: Number(qp.value.fromAccountId),
+      racunPrimaocaBroj: qp.value.recipientBroj,
+      iznos: Number(qp.value.iznos),
+      svrha: 'Brzo plaćanje',
+      sifraPlacanja: '289',
+      pozivNaBroj: '',
+    })
+    qpSuccess.value = true
+    qp.value = { fromAccountId: '', recipientBroj: '', iznos: '' }
+  } catch (e: any) {
+    qpError.value = e.response?.data?.message || 'Greška pri plaćanju.'
+  } finally {
+    qpLoading.value = false
   }
 }
 
@@ -213,6 +243,44 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+
+      <!-- Quick payment -->
+      <div class="section">
+        <div class="section-header">
+          <h2>Brzo plaćanje</h2>
+          <RouterLink to="/client/payments/new" class="section-link">Puno plaćanje →</RouterLink>
+        </div>
+        <form class="quick-payment" @submit.prevent="submitQuickPayment">
+          <div class="qp-field">
+            <label>Sa računa</label>
+            <select v-model="qp.fromAccountId">
+              <option value="">-- Izaberite račun --</option>
+              <option v-for="acc in accountStore.accounts" :key="acc.id" :value="String(acc.id)">
+                {{ acc.naziv || acc.brojRacuna }} ({{ acc.currencyKod }})
+              </option>
+            </select>
+          </div>
+          <div class="qp-field">
+            <label>Račun primaoca</label>
+            <input v-model="qp.recipientBroj" placeholder="Broj računa primaoca" maxlength="18" />
+          </div>
+          <div class="qp-field">
+            <label>Iznos</label>
+            <input v-model="qp.iznos" type="number" min="0.01" step="0.01" placeholder="0.00" />
+          </div>
+          <div v-if="qpError" class="qp-error">{{ qpError }}</div>
+          <div v-if="qpSuccess" class="qp-success">Plaćanje inicirano. Proverite e-mail za kod.</div>
+          <button type="submit" class="qp-btn" :disabled="!qp.fromAccountId || !qp.recipientBroj || !qp.iznos || qpLoading" @click.prevent="submitQuickPayment">
+            {{ qpLoading ? 'Šaljem...' : 'Plati' }}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Quick actions row -->
+    <div class="two-col">
+      <!-- placeholder for layout balance -->
+      <div></div>
 
       <!-- Quick actions -->
       <div class="section">
@@ -531,6 +599,73 @@ onMounted(async () => {
 }
 .action-icon {
   font-size: 22px;
+}
+
+/* Quick payment */
+.quick-payment {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.qp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.qp-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.qp-field select,
+.qp-field input {
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #f8fafc;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.qp-field select:focus,
+.qp-field input:focus {
+  border-color: #3b82f6;
+  background: #fff;
+}
+.qp-error {
+  font-size: 13px;
+  color: #dc2626;
+  background: #fef2f2;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.qp-success {
+  font-size: 13px;
+  color: #16a34a;
+  background: #f0fdf4;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.qp-btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.qp-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.qp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Empty state */

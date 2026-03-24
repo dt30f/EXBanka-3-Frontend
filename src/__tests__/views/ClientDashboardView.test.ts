@@ -185,6 +185,63 @@ describe('ClientDashboardView', () => {
     expect(wrapper.text()).toContain('Menjačnica')
   })
 
+  // Section 7: Brzo plaćanje
+  it('renders Brzo plaćanje section', async () => {
+    const wrapper = mount(ClientDashboardView)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Brzo plaćanje')
+  })
+
+  it('quick payment form has account select, recipient input and amount input', async () => {
+    const wrapper = mount(ClientDashboardView)
+    await flushPromises()
+    const qp = wrapper.find('.quick-payment')
+    expect(qp.exists()).toBe(true)
+    expect(qp.find('select').exists()).toBe(true)
+    expect(qp.find('input[placeholder="Broj računa primaoca"]').exists()).toBe(true)
+    expect(qp.find('input[type="number"]').exists()).toBe(true)
+  })
+
+  it('submitting quick payment calls paymentApi.create with correct args', async () => {
+    vi.mocked(paymentApi.create).mockResolvedValueOnce({
+      data: { payment: { id: 'p99', status: 'u_obradi' } },
+    })
+
+    const wrapper = mount(ClientDashboardView)
+    await flushPromises()
+
+    const qp = wrapper.find('.quick-payment')
+    await qp.find('select').setValue('1')
+    await qp.find('input[placeholder="Broj računa primaoca"]').setValue('999999999999999999')
+    await qp.find('input[type="number"]').setValue('500')
+    await qp.find('button[type="submit"]').trigger('click')
+    await flushPromises()
+
+    expect(paymentApi.create).toHaveBeenCalledWith(expect.objectContaining({
+      racunPosiljaocaId: 1,
+      racunPrimaocaBroj: '999999999999999999',
+      iznos: 500,
+    }))
+  })
+
+  it('quick payment success shows confirmation message', async () => {
+    vi.mocked(paymentApi.create).mockResolvedValueOnce({
+      data: { payment: { id: 'p99', status: 'u_obradi' } },
+    })
+
+    const wrapper = mount(ClientDashboardView)
+    await flushPromises()
+
+    const qp = wrapper.find('.quick-payment')
+    await qp.find('select').setValue('1')
+    await qp.find('input[placeholder="Broj računa primaoca"]').setValue('999999999999999999')
+    await qp.find('input[type="number"]').setValue('500')
+    await qp.find('button[type="submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('inicirano')
+  })
+
   // Data loading
   it('loads all data on mount', async () => {
     mount(ClientDashboardView)
