@@ -10,6 +10,7 @@ export interface TransferItem {
   kurs: number
   svrha: string
   status: string
+  verifikacioniKod?: string
   vremeTransakcije: string
 }
 
@@ -37,6 +38,11 @@ export const transferApi = {
       racun_primaoca_id:   data.racunPrimaocaId,
       iznos:               data.iznos,
       svrha:               data.svrha,
+    }),
+
+  verify: (transferId: string, verificationCode: string) =>
+    clientApi.post(`/transfers/${transferId}/verify`, {
+      verification_code: verificationCode,
     }),
 
   listByClient: (clientId: string, filter: TransferFilter = {}) =>

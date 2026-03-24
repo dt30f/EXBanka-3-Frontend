@@ -17,6 +17,7 @@ vi.mock('vue-router', async (importOriginal) => {
 vi.mock('../../api/transfer', () => ({
   transferApi: {
     create: vi.fn(),
+    verify: vi.fn(),
     listByClient: vi.fn(),
     listByAccount: vi.fn(),
     calculateExchange: vi.fn(),
@@ -109,7 +110,7 @@ describe('ClientTransfersView', () => {
     const wrapper = mount(ClientTransfersView)
     await flushPromises()
     expect(wrapper.text()).toContain('Kirija')
-    expect(wrapper.text()).toContain('uspesno')
+    expect(wrapper.text()).toContain('Uspešno')
   })
 
   it('shows empty state when no transfers', async () => {
@@ -121,15 +122,15 @@ describe('ClientTransfersView', () => {
     expect(wrapper.text()).toContain('Nema transfera')
   })
 
-  it('Dalje button is disabled when form is incomplete', async () => {
+  it('Nastavi button is disabled when form is incomplete', async () => {
     const wrapper = mount(ClientTransfersView)
     await flushPromises()
-    const daljeBtn = wrapper.findAll('button').find(b => b.text() === 'Dalje')
-    expect(daljeBtn).toBeDefined()
-    expect(daljeBtn!.attributes('disabled')).toBeDefined()
+    const nastaviBtn = wrapper.findAll('button').find(b => b.text() === 'Nastavi')
+    expect(nastaviBtn).toBeDefined()
+    expect(nastaviBtn!.attributes('disabled')).toBeDefined()
   })
 
-  it('moves to confirm step when form is filled and Dalje clicked', async () => {
+  it('moves to confirm step when form is filled and Nastavi clicked', async () => {
     const wrapper = mount(ClientTransfersView)
     await flushPromises()
 
@@ -146,15 +147,15 @@ describe('ClientTransfersView', () => {
 
     await wrapper.vm.$nextTick()
 
-    const daljeBtn = wrapper.findAll('button').find(b => b.text() === 'Dalje')
-    await daljeBtn!.trigger('click')
+    const nastaviBtn = wrapper.findAll('button').find(b => b.text() === 'Nastavi')
+    await nastaviBtn!.trigger('click')
 
-    expect(wrapper.text()).toContain('Potvrda transfera')
+    expect(wrapper.text()).toContain('Potvrdi transfer')
   })
 
-  it('shows success step after successful transfer', async () => {
+  it('after Potvrdi the verify step is shown with code input', async () => {
     vi.mocked(transferApi.create).mockResolvedValueOnce({
-      data: { transfer: mockTransfers[0] },
+      data: { transfer: { ...mockTransfers[0], status: 'u_obradi' } },
     })
 
     const wrapper = mount(ClientTransfersView)
@@ -165,18 +166,45 @@ describe('ClientTransfersView', () => {
     await selects[1].setValue('2')
 
     const inputs = wrapper.findAll('input')
-    const iznosInput = inputs.find(i => i.attributes('type') === 'number')
-    await iznosInput!.setValue('1000')
-
-    const svrhaInput = inputs.find(i => i.attributes('placeholder') === 'Svrha transakcije')
-    await svrhaInput!.setValue('Test')
-
+    await inputs.find(i => i.attributes('type') === 'number')!.setValue('1000')
+    await inputs.find(i => i.attributes('placeholder') === 'Svrha transakcije')!.setValue('Test')
     await wrapper.vm.$nextTick()
-    const daljeBtn = wrapper.findAll('button').find(b => b.text() === 'Dalje')
-    await daljeBtn!.trigger('click')
 
-    const potvrdiBtn = wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))
-    await potvrdiBtn!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('verifikacioni kod')
+  })
+
+  it('shows success after valid verification code is submitted', async () => {
+    vi.mocked(transferApi.create).mockResolvedValueOnce({
+      data: { transfer: { ...mockTransfers[0], status: 'u_obradi' } },
+    })
+    vi.mocked(transferApi.verify).mockResolvedValueOnce({
+      data: { id: '1', status: 'uspesno' },
+    })
+
+    const wrapper = mount(ClientTransfersView)
+    await flushPromises()
+
+    const selects = wrapper.findAll('select')
+    await selects[0].setValue('1')
+    await selects[1].setValue('2')
+
+    const inputs = wrapper.findAll('input')
+    await inputs.find(i => i.attributes('type') === 'number')!.setValue('1000')
+    await inputs.find(i => i.attributes('placeholder') === 'Svrha transakcije')!.setValue('Test')
+    await wrapper.vm.$nextTick()
+
+    await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
+    await flushPromises()
+
+    // Enter 6-digit verification code
+    const codeInput = wrapper.find('input[maxlength="6"]')
+    await codeInput.setValue('123456')
+    await wrapper.findAll('button').find(b => b.text().includes('Verifikuj'))!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('uspešno realizovan')

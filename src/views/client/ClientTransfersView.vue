@@ -11,7 +11,9 @@ const clientAuthStore = useClientAuthStore()
 const accountStore = useClientAccountStore()
 const transferStore = useTransferStore()
 
-const step = ref<'form' | 'confirm' | 'success'>('form')
+const step = ref<'form' | 'confirm' | 'verify' | 'success'>('form')
+const verifyCode = ref('')
+const verifyError = ref('')
 
 const form = ref({
   fromAccountId: (route.query.fromAccountId as string) || '',
@@ -82,16 +84,30 @@ async function handleSubmit() {
       svrha: form.value.svrha,
     })
     lastCreated.value = result
+    verifyCode.value = ''
+    verifyError.value = ''
+    step.value = 'verify'
+  } catch {
+    step.value = 'form'
+  }
+}
+
+async function handleVerify() {
+  if (!lastCreated.value || verifyCode.value.length !== 6) return
+  try {
+    await transferStore.verifyTransfer(String(lastCreated.value.id), verifyCode.value)
     step.value = 'success'
     await transferStore.fetchByClient(clientId.value)
   } catch {
-    step.value = 'form'
+    verifyError.value = 'Pogrešan verifikacioni kod. Pokušajte ponovo.'
   }
 }
 
 function startNew() {
   form.value = { fromAccountId: '', toAccountId: '', iznos: '', svrha: '' }
   exchangePreview.value = null
+  verifyCode.value = ''
+  verifyError.value = ''
   step.value = 'form'
 }
 
@@ -256,6 +272,31 @@ onMounted(async () => {
           </div>
         </div>
 
+        <!-- Verify -->
+        <div v-else-if="step === 'verify'" class="tf-verify">
+          <div class="tf-verify-icon">✉</div>
+          <p class="tf-verify-text">Unesite verifikacioni kod koji ste primili emailom.</p>
+          <div class="tf-field">
+            <label>Verifikacioni kod</label>
+            <input
+              v-model="verifyCode"
+              type="text"
+              maxlength="6"
+              placeholder="6-cifreni kod"
+              @keyup.enter="handleVerify"
+            />
+          </div>
+          <div v-if="verifyError" class="tf-error">{{ verifyError }}</div>
+          <div class="tf-actions">
+            <button class="tf-btn tf-btn-sec" @click="step = 'form'">Otkaži</button>
+            <button
+              class="tf-btn"
+              :disabled="verifyCode.length !== 6"
+              @click="handleVerify"
+            >Verifikuj transfer</button>
+          </div>
+        </div>
+
         <!-- Success -->
         <div v-else class="tf-success">
           <div class="tf-success-icon">✓</div>
@@ -350,6 +391,11 @@ onMounted(async () => {
 .tf-confirm-row:last-child { border-bottom: none; }
 .tf-confirm-label { color: rgba(255,255,255,0.5); font-size: 13px; }
 .tf-confirm-amount { font-size: 18px; font-weight: 700; }
+
+/* Verify */
+.tf-verify { text-align: center; padding: 8px 0; }
+.tf-verify-icon { font-size: 40px; margin-bottom: 10px; }
+.tf-verify-text { font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 20px; }
 
 /* Success */
 .tf-success { text-align: center; padding: 32px 0; }

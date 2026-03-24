@@ -15,6 +15,10 @@ export const useTransferStore = defineStore('transfer', () => {
     return res.data.transfer
   }
 
+  async function verifyTransfer(transferId: string, verificationCode: string): Promise<void> {
+    await transferApi.verify(transferId, verificationCode)
+  }
+
   async function fetchByClient(clientId: string, filter: TransferFilter = {}) {
     loading.value = true
     error.value = ''
@@ -47,5 +51,5 @@ export const useTransferStore = defineStore('transfer', () => {
     error.value = ''
   }
 
-  return { transfers, total, page, pageSize, loading, error, createTransfer, fetchByClient, fetchByAccount, clearError }
+  return { transfers, total, page, pageSize, loading, error, createTransfer, verifyTransfer, fetchByClient, fetchByAccount, clearError }
 })
