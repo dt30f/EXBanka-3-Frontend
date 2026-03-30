@@ -63,11 +63,24 @@ export function activateClient(setupToken, password = Cypress.env('clientPasswor
 }
 
 export function loginClientUi(email, password = Cypress.env('clientPassword')) {
-  cy.visit('/client/login')
+  cy.visit('/client/login', {
+    onBeforeLoad(win) {
+      win.sessionStorage.clear()
+    },
+  })
   cy.get('input[type="email"]').clear().type(email)
   cy.get('input[type="password"]').clear().type(password)
   cy.contains('button', 'Sign In').click()
   cy.url().should('include', '/client/dashboard')
+}
+
+export function updateClientPermissions(employeeToken, clientId, permissionNames) {
+  return cy.request({
+    method: 'PUT',
+    url: `${API_BASE}/clients/${clientId}/permissions`,
+    headers: { Authorization: `Bearer ${employeeToken}` },
+    body: { permission_names: permissionNames },
+  })
 }
 
 export function createAccount(employeeToken, clientId, currencyId, naziv, pocetnoStanje, overrides = {}) {

@@ -1,0 +1,96 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import {
+  employeeMarketApi,
+} from '../api/employeeMarket'
+import type {
+  ExchangeItem,
+  ListingHistoryItem,
+  ListingItem,
+  PortfolioOverview,
+} from '../api/market'
+
+export const useEmployeeMarketStore = defineStore('employeeMarket', () => {
+  const exchanges = ref<ExchangeItem[]>([])
+  const listings = ref<ListingItem[]>([])
+  const currentListing = ref<ListingItem | null>(null)
+  const currentHistory = ref<ListingHistoryItem[]>([])
+  const portfolio = ref<PortfolioOverview | null>(null)
+
+  const loading = ref(false)
+  const detailsLoading = ref(false)
+  const portfolioLoading = ref(false)
+  const error = ref('')
+
+  async function fetchExchanges() {
+    try {
+      const res = await employeeMarketApi.listExchanges()
+      exchanges.value = res.data.exchanges ?? []
+    } catch (e: any) {
+      exchanges.value = []
+      error.value = e.response?.data?.message || 'Failed to load exchanges.'
+    }
+  }
+
+  async function fetchListings(query = '') {
+    loading.value = true
+    error.value = ''
+    try {
+      const res = await employeeMarketApi.listListings(query)
+      listings.value = res.data.listings ?? []
+    } catch (e: any) {
+      error.value = e.response?.data?.message || 'Failed to load listings.'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchListingDetails(ticker: string) {
+    detailsLoading.value = true
+    error.value = ''
+    try {
+      const [listingRes, historyRes] = await Promise.all([
+        employeeMarketApi.getListing(ticker),
+        employeeMarketApi.getListingHistory(ticker),
+      ])
+      currentListing.value = listingRes.data.listing
+      currentHistory.value = historyRes.data.history ?? []
+    } catch (e: any) {
+      error.value = e.response?.data?.message || 'Failed to load security details.'
+      currentListing.value = null
+      currentHistory.value = []
+    } finally {
+      detailsLoading.value = false
+    }
+  }
+
+  async function fetchPortfolio() {
+    portfolioLoading.value = true
+    error.value = ''
+    try {
+      const res = await employeeMarketApi.getPortfolio()
+      portfolio.value = res.data.portfolio
+    } catch (e: any) {
+      error.value = e.response?.data?.message || 'Failed to load portfolio.'
+      portfolio.value = null
+    } finally {
+      portfolioLoading.value = false
+    }
+  }
+
+  return {
+    exchanges,
+    listings,
+    currentListing,
+    currentHistory,
+    portfolio,
+    loading,
+    detailsLoading,
+    portfolioLoading,
+    error,
+    fetchExchanges,
+    fetchListings,
+    fetchListingDetails,
+    fetchPortfolio,
+  }
+})

@@ -1,0 +1,79 @@
+import clientApi from './clientAuth'
+
+export interface ExchangeItem {
+  name: string
+  acronym: string
+  micCode: string
+  polity: string
+  currency: string
+  timezone: string
+  workingHours: string
+  enabled: boolean
+}
+
+export interface ExchangeSummary {
+  name: string
+  acronym: string
+  micCode: string
+  currency: string
+}
+
+export interface ListingItem {
+  ticker: string
+  name: string
+  exchange: ExchangeSummary
+  lastRefresh: string
+  price: number
+  ask: number
+  bid: number
+  volume: number
+  type: string
+}
+
+export interface ListingHistoryItem {
+  date: string
+  price: number
+  high: number
+  low: number
+  change: number
+  volume: number
+}
+
+export interface PortfolioItem {
+  ticker: string
+  name: string
+  exchange: string
+  currency: string
+  quantity: number
+  averagePrice: number
+  currentPrice: number
+  marketValue: number
+  pnl: number
+  pnlPercent: number
+}
+
+export interface PortfolioOverview {
+  ownerId: string
+  ownerType: string
+  generatedAt: string
+  valuationAsOf: string
+  valuationCurrency: string
+  estimatedValue: number
+  unrealizedPnL: number
+  positionCount: number
+  readOnly: boolean
+  modelType: string
+  positionSource: string
+  pricingSource: string
+  items: PortfolioItem[]
+}
+
+export const marketApi = {
+  listExchanges: () => clientApi.get<{ exchanges: ExchangeItem[]; count: number }>('/exchanges'),
+  listListings: (q = '') => clientApi.get<{ listings: ListingItem[]; count: number; query: string }>('/listings', {
+    params: { q: q || undefined },
+  }),
+  getListing: (ticker: string) => clientApi.get<{ listing: ListingItem }>(`/listings/${ticker}`),
+  getListingHistory: (ticker: string) => clientApi.get<{ ticker: string; history: ListingHistoryItem[] }>(`/listings/${ticker}/history`),
+  getPortfolio: () => clientApi.get<{ portfolio: PortfolioOverview }>('/portfolio'),
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, RouterLink, useRoute } from 'vue-router'
 import { useClientAuthStore } from '../../stores/clientAuth'
 
@@ -7,6 +7,7 @@ const router = useRouter()
 const route = useRoute()
 const clientAuth = useClientAuthStore()
 const paymentsOpen = ref(true)
+const canAccessMarket = computed(() => clientAuth.hasPermission('clientTrading'))
 
 function logout() {
   clientAuth.logout()
@@ -39,6 +40,14 @@ function isPaymentSection() {
 
         <RouterLink to="/client/accounts" class="sidebar-link" :class="{ active: isActive('/client/accounts') }">
           <span class="sidebar-icon">o</span><span>Racuni</span>
+        </RouterLink>
+
+        <RouterLink v-if="canAccessMarket" to="/client/securities" class="sidebar-link" :class="{ active: isActive('/client/securities') }">
+          <span class="sidebar-icon">%</span><span>Hartije</span>
+        </RouterLink>
+
+        <RouterLink v-if="canAccessMarket" to="/client/portfolio" class="sidebar-link" :class="{ active: isActive('/client/portfolio') }">
+          <span class="sidebar-icon">$</span><span>Portfolio</span>
         </RouterLink>
 
         <RouterLink to="/client/transfers" class="sidebar-link" :class="{ active: isActive('/client/transfers') }">

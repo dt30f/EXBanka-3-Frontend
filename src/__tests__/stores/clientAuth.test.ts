@@ -75,4 +75,27 @@ describe('clientAuth store', () => {
     store.logout()
     expect(store.isLoggedIn).toBe(false)
   })
+
+  it('exposes permissions and checks client trading access', async () => {
+    vi.mocked(clientAuthApi.login).mockResolvedValueOnce({
+      data: {
+        accessToken: 'test-access',
+        refreshToken: 'test-refresh',
+        client: {
+          id: '1',
+          ime: 'Ana',
+          prezime: 'Jovic',
+          email: 'ana@gmail.com',
+          permissions: ['clientBasic', 'clientTrading'],
+        },
+      },
+    })
+
+    const store = useClientAuthStore()
+    await store.login('ana@gmail.com', 'password123')
+
+    expect(store.permissions).toEqual(['clientBasic', 'clientTrading'])
+    expect(store.hasPermission('clientTrading')).toBe(true)
+    expect(store.hasPermission('employeeAgent')).toBe(false)
+  })
 })

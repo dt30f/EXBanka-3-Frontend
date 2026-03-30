@@ -49,6 +49,26 @@ const router = createRouter({
           component: () => import('../views/CreateAccountView.vue'),
         },
         {
+          path: 'securities',
+          component: () => import('../views/EmployeeSecuritiesView.vue'),
+          meta: { employeeTradingOnly: true },
+        },
+        {
+          path: 'securities/:ticker',
+          component: () => import('../views/EmployeeSecurityDetailsView.vue'),
+          meta: { employeeTradingOnly: true },
+        },
+        {
+          path: 'portfolio',
+          component: () => import('../views/EmployeePortfolioView.vue'),
+          meta: { employeeTradingOnly: true },
+        },
+        {
+          path: 'actuaries',
+          component: () => import('../views/EmployeeActuariesManagementView.vue'),
+          meta: { employeeSupervisorOnly: true },
+        },
+        {
           path: 'loans/requests',
           component: () => import('../views/LoanRequestsView.vue'),
         },
@@ -69,11 +89,16 @@ router.beforeEach((to) => {
   // Client routes
   if (to.meta.clientOnly && !clientAuth.isLoggedIn) return '/client/login'
   if (to.path === '/client/login' && clientAuth.isLoggedIn) return '/client/dashboard'
+  if (to.meta.clientTradingOnly && !clientAuth.hasPermission('clientTrading')) {
+    return '/client/dashboard'
+  }
   if (to.meta.clientOnly || to.meta.clientPublic) return
 
   // Employee routes
   if (!to.meta.public && !auth.isLoggedIn) return '/login'
   if (to.path === '/login' && auth.isLoggedIn) return '/clients'
+  if (to.meta.employeeTradingOnly && !auth.hasPermission('employeeAgent')) return '/clients'
+  if (to.meta.employeeSupervisorOnly && !auth.hasPermission('employeeSupervisor')) return '/clients'
   if (to.meta.adminOnly && !auth.hasPermission('employeeAdmin')) return '/clients'
 })
 

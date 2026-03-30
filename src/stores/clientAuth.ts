@@ -18,6 +18,7 @@ export const useClientAuthStore = defineStore('clientAuth', () => {
   )
 
   const isLoggedIn = computed(() => !!accessToken.value)
+  const permissions = computed(() => client.value?.permissions ?? [])
 
   async function login(email: string, password: string) {
     const res = await clientAuthApi.login(email, password)
@@ -39,5 +40,18 @@ export const useClientAuthStore = defineStore('clientAuth', () => {
     sessionStorage.removeItem('client')
   }
 
-  return { accessToken, refreshToken, client, isLoggedIn, login, logout }
+  function hasPermission(permission: string) {
+    return permissions.value.includes(permission)
+  }
+
+  return {
+    accessToken,
+    refreshToken,
+    client,
+    isLoggedIn,
+    permissions,
+    login,
+    logout,
+    hasPermission,
+  }
 })
