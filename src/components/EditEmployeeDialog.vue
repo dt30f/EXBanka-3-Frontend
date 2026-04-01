@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { employeeApi, type UpdateEmployeePayload } from '../api/employee'
 import PermissionManager from './PermissionManager.vue'
 import { usePermissions } from '../composables/usePermissions'
@@ -33,13 +33,32 @@ const error = ref('')
 const loading = ref(false)
 const activeTab = ref<'info' | 'permissions'>('info')
 
+// Actuary role checkboxes
+const isAgentChecked = ref(false)
+const isSupervisorChecked = ref(false)
+const isTargetAdmin = computed(() => {
+  return props.employee.permissions.some(p => p.name === 'employeeAdmin')
+})
+
 watch(() => props.employee, (emp) => {
   form.value = {
     ...emp,
     datumRodjenja: emp.datumRodjenja ? emp.datumRodjenja.substring(0, 10) : '',
   }
   selectedPermissions.value = emp.permissions.map(p => p.name)
+  isAgentChecked.value = selectedPermissions.value.includes('employeeAgent')
+  isSupervisorChecked.value = selectedPermissions.value.includes('employeeSupervisor')
 }, { immediate: true })
+
+// Sync checkboxes back to permissions list
+watch([isAgentChecked, isSupervisorChecked], ([agent, supervisor]) => {
+  const permsSet = new Set(selectedPermissions.value)
+  if (agent) permsSet.add('employeeAgent')
+  else permsSet.delete('employeeAgent')
+  if (supervisor) permsSet.add('employeeSupervisor')
+  else permsSet.delete('employeeSupervisor')
+  selectedPermissions.value = Array.from(permsSet)
+})
 
 async function handleSave() {
   error.value = ''
@@ -166,6 +185,27 @@ async function handleSave() {
 
         <!-- Permissions tab -->
         <template v-if="activeTab === 'permissions' && perms.canManagePermissions()">
+          <!-- Actuary role checkboxes (only for non-admin employees) -->
+          <div v-if="!isTargetAdmin" style="margin-bottom:20px;padding:16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+            <h3 style="margin:0 0 12px;font-size:14px;color:#475569">Actuary Roles</h3>
+            <div style="display:flex;gap:24px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" v-model="isAgentChecked" style="width:16px;height:16px" />
+                <span>Agent</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" v-model="isSupervisorChecked" style="width:16px;height:16px" />
+                <span>Supervisor</span>
+              </label>
+            </div>
+            <p style="margin:8px 0 0;font-size:12px;color:#94a3b8">
+              Agents trade with limits. Supervisors trade without limits and manage agents.
+            </p>
+          </div>
+          <div v-else style="margin-bottom:16px;padding:12px;background:#fef3c7;border-radius:8px;font-size:13px;color:#92400e">
+            This employee is an admin. Admins are automatically supervisors. One admin cannot edit another admin's roles.
+          </div>
+
           <PermissionManager
             :allPermissions="allPermissions"
             v-model="selectedPermissions"

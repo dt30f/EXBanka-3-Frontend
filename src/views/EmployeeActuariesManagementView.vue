@@ -31,9 +31,56 @@ async function fetchActuaries() {
   }
 }
 
-function formatLimit(value?: number) {
-  if (value == null) return 'Bez limita'
-  return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// --- Edit state ---
+const editLimits = ref<Record<string, string>>({})
+const saving = ref<Record<string, boolean>>({})
+
+function getLimitInput(id: string, current?: number): string {
+  if (editLimits.value[id] !== undefined) return editLimits.value[id]
+  return current != null ? String(current) : ''
+}
+
+function setLimitInput(id: string, val: string) {
+  editLimits.value[id] = val
+}
+
+async function saveLimit(item: ActuaryManagementItem) {
+  saving.value[item.employeeId] = true
+  try {
+    const raw = editLimits.value[item.employeeId]
+    const limit = raw != null && raw !== '' ? parseFloat(raw) : null
+    await actuaryApi.updateLimit(item.employeeId, limit)
+    await fetchActuaries()
+    delete editLimits.value[item.employeeId]
+  } catch (e: any) {
+    error.value = e.response?.data?.message || 'Failed to update limit.'
+  } finally {
+    saving.value[item.employeeId] = false
+  }
+}
+
+async function resetUsedLimit(item: ActuaryManagementItem) {
+  saving.value[`reset-${item.employeeId}`] = true
+  try {
+    await actuaryApi.resetUsedLimit(item.employeeId)
+    await fetchActuaries()
+  } catch (e: any) {
+    error.value = e.response?.data?.message || 'Failed to reset used limit.'
+  } finally {
+    saving.value[`reset-${item.employeeId}`] = false
+  }
+}
+
+async function toggleNeedApproval(item: ActuaryManagementItem) {
+  saving.value[`approval-${item.employeeId}`] = true
+  try {
+    await actuaryApi.setNeedApproval(item.employeeId, !item.needApproval)
+    await fetchActuaries()
+  } catch (e: any) {
+    error.value = e.response?.data?.message || 'Failed to update approval setting.'
+  } finally {
+    saving.value[`approval-${item.employeeId}`] = false
+  }
 }
 
 onMounted(fetchActuaries)
@@ -44,7 +91,7 @@ onMounted(fetchActuaries)
     <div class="page-header">
       <div>
         <h1>Aktuari i supervizori</h1>
-        <p>Read-only pregled traderskih ovlascenja i limita kao Sprint 4 foundation.</p>
+        <p>Upravljanje limitima, odobrenjima i ulogama aktuara.</p>
       </div>
       <div class="search-box">
         <input v-model="query" type="text" placeholder="Pretraga po imenu, email-u ili username-u" />
@@ -86,6 +133,7 @@ onMounted(fetchActuaries)
               <th>Used limit</th>
               <th>Approval</th>
               <th>Status</th>
+              <th>Akcije</th>
             </tr>
           </thead>
           <tbody>
@@ -103,17 +151,60 @@ onMounted(fetchActuaries)
                 <div class="person-name">{{ item.pozicija || 'N/A' }}</div>
                 <div class="person-meta">{{ item.departman || 'N/A' }}</div>
               </td>
-              <td>{{ formatLimit(item.limit) }}</td>
-              <td>{{ item.usedLimit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
               <td>
-                <span class="approval-pill" :class="{ yes: item.needApproval, no: !item.needApproval }">
+                <template v-if="item.isSupervisor">Bez limita</template>
+                <template v-else>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <input
+                      type="number"
+                      class="limit-input"
+                      :value="getLimitInput(item.employeeId, item.limit)"
+                      @input="setLimitInput(item.employeeId, ($event.target as HTMLInputElement).value)"
+                      placeholder="0.00"
+                      step="1000"
+                      min="0"
+                    />
+                    <button
+                      class="btn-sm btn-primary-sm"
+                      @click="saveLimit(item)"
+                      :disabled="saving[item.employeeId]"
+                    >{{ saving[item.employeeId] ? '...' : 'Save' }}</button>
+                  </div>
+                </template>
+              </td>
+              <td>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span>{{ item.usedLimit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                  <button
+                    v-if="!item.isSupervisor"
+                    class="btn-sm btn-reset"
+                    @click="resetUsedLimit(item)"
+                    :disabled="saving[`reset-${item.employeeId}`]"
+                    title="Reset used limit to 0"
+                  >Reset</button>
+                </div>
+              </td>
+              <td>
+                <button
+                  v-if="!item.isSupervisor"
+                  class="approval-pill"
+                  :class="{ yes: item.needApproval, no: !item.needApproval }"
+                  @click="toggleNeedApproval(item)"
+                  :disabled="saving[`approval-${item.employeeId}`]"
+                  style="cursor:pointer;border:none"
+                  :title="item.needApproval ? 'Click to disable approval' : 'Click to require approval'"
+                >
                   {{ item.needApproval ? 'Da' : 'Ne' }}
-                </span>
+                </button>
+                <span v-else class="approval-pill no">Ne</span>
               </td>
               <td>
                 <span class="status-pill" :class="{ active: item.aktivan, inactive: !item.aktivan }">
                   {{ item.aktivan ? 'Aktivan' : 'Neaktivan' }}
                 </span>
+              </td>
+              <td>
+                <button class="btn-sm btn-refresh" @click="fetchActuaries" title="Refresh">Refresh</button>
               </td>
             </tr>
           </tbody>
@@ -298,6 +389,62 @@ onMounted(fetchActuaries)
 .error-box {
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.limit-input {
+  width: 110px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.limit-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+}
+
+.btn-sm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary-sm {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.btn-primary-sm:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-reset {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.btn-reset:hover:not(:disabled) {
+  background: #fde68a;
+}
+
+.btn-refresh {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: #e2e8f0;
 }
 
 @media (max-width: 960px) {

@@ -19,4 +19,10 @@ export interface ActuaryManagementItem {
 
 export const actuaryApi = {
   list: () => api.get<{ actuaries: ActuaryManagementItem[]; count: number }>('/actuaries'),
+  updateLimit: (employeeId: string, limit: number | null) =>
+    api.put(`/actuaries/${employeeId}/limit`, { limit }),
+  resetUsedLimit: (employeeId: string) =>
+    api.post(`/actuaries/${employeeId}/reset-used-limit`),
+  setNeedApproval: (employeeId: string, needApproval: boolean) =>
+    api.put(`/actuaries/${employeeId}/need-approval`, { needApproval }),
 }

@@ -2,13 +2,25 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useMarketStore } from '../../stores/market'
+import type { ListingItem } from '../../api/market'
 
 type SortOption = 'tickerAsc' | 'nameAsc' | 'priceDesc' | 'priceAsc' | 'volumeDesc'
+type TypeTab = 'all' | 'stock' | 'futures'
 
 const marketStore = useMarketStore()
 const query = ref('')
-const typeFilter = ref('all')
+const activeTab = ref<TypeTab>('all')
 const sortBy = ref<SortOption>('tickerAsc')
+
+// Range filters
+const priceMin = ref('')
+const priceMax = ref('')
+const askMin = ref('')
+const askMax = ref('')
+const bidMin = ref('')
+const bidMax = ref('')
+const volumeMin = ref('')
+const volumeMax = ref('')
 
 const formatter = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
@@ -17,11 +29,19 @@ const formatter = new Intl.NumberFormat('en-US', {
 
 const volumeFormatter = new Intl.NumberFormat('en-US')
 
-const typeOptions = computed(() => {
-  const options = new Set<string>()
-  marketStore.listings.forEach((listing) => options.add(listing.type))
-  return ['all', ...Array.from(options).sort()]
-})
+function getInitialMarginCost(listing: ListingItem): number {
+  switch (listing.type) {
+    case 'futures': return listing.price * 0.10
+    case 'stock':   return listing.price * 0.50
+    default:        return listing.price * 0.50
+  }
+}
+
+function inRange(value: number, min: string, max: string): boolean {
+  if (min !== '' && value < parseFloat(min)) return false
+  if (max !== '' && value > parseFloat(max)) return false
+  return true
+}
 
 const filteredListings = computed(() => {
   const needle = query.value.trim().toLowerCase()
@@ -30,8 +50,12 @@ const filteredListings = computed(() => {
       !needle ||
       listing.ticker.toLowerCase().includes(needle) ||
       listing.name.toLowerCase().includes(needle)
-    const matchesType = typeFilter.value === 'all' || listing.type === typeFilter.value
-    return matchesQuery && matchesType
+    const matchesType = activeTab.value === 'all' || listing.type === activeTab.value
+    const matchesPrice = inRange(listing.price, priceMin.value, priceMax.value)
+    const matchesAsk = inRange(listing.ask, askMin.value, askMax.value)
+    const matchesBid = inRange(listing.bid, bidMin.value, bidMax.value)
+    const matchesVolume = inRange(listing.volume, volumeMin.value, volumeMax.value)
+    return matchesQuery && matchesType && matchesPrice && matchesAsk && matchesBid && matchesVolume
   })
 
   return [...filtered].sort((left, right) => {
@@ -58,6 +82,24 @@ const enabledExchanges = computed(() =>
 function formatPrice(value: number) {
   return formatter.format(value)
 }
+
+function clearFilters() {
+  priceMin.value = ''
+  priceMax.value = ''
+  askMin.value = ''
+  askMax.value = ''
+  bidMin.value = ''
+  bidMax.value = ''
+  volumeMin.value = ''
+  volumeMax.value = ''
+}
+
+const hasActiveFilters = computed(() =>
+  priceMin.value !== '' || priceMax.value !== '' ||
+  askMin.value !== '' || askMax.value !== '' ||
+  bidMin.value !== '' || bidMax.value !== '' ||
+  volumeMin.value !== '' || volumeMax.value !== ''
+)
 
 onMounted(async () => {
   await Promise.all([
@@ -88,7 +130,7 @@ onMounted(async () => {
       </article>
       <article class="summary-card">
         <span>Tipovi</span>
-        <strong>{{ typeOptions.length - 1 }}</strong>
+        <strong>{{ new Set(marketStore.listings.map((l) => l.type)).size }}</strong>
       </article>
     </div>
 
@@ -117,23 +159,52 @@ onMounted(async () => {
     <section class="panel">
       <div class="panel-head panel-head-stack">
         <div>
-          <h2>Akcije</h2>
-          <span class="panel-meta">Pretraga po ticker-u i nazivu uz stabilno sortiranje.</span>
+          <h2>Hartije</h2>
+          <span class="panel-meta">Pretraga i filtriranje po tipu, ceni, ask/bid i volumenu.</span>
         </div>
-        <div class="controls-grid">
-          <input v-model="query" type="text" placeholder="Pretraga po ticker-u ili nazivu" />
-          <select v-model="typeFilter">
-            <option v-for="option in typeOptions" :key="option" :value="option">
-              {{ option === 'all' ? 'Svi tipovi' : option }}
-            </option>
-          </select>
-          <select v-model="sortBy">
-            <option value="tickerAsc">Ticker A-Z</option>
-            <option value="nameAsc">Naziv A-Z</option>
-            <option value="priceDesc">Cena opadajuce</option>
-            <option value="priceAsc">Cena rastuce</option>
-            <option value="volumeDesc">Volume opadajuce</option>
-          </select>
+        <div class="controls-top">
+          <div class="tab-bar">
+            <button :class="['tab-btn', { active: activeTab === 'all' }]" @click="activeTab = 'all'">Sve</button>
+            <button :class="['tab-btn', { active: activeTab === 'stock' }]" @click="activeTab = 'stock'">Akcije</button>
+            <button :class="['tab-btn', { active: activeTab === 'futures' }]" @click="activeTab = 'futures'">Futures</button>
+          </div>
+          <div class="search-sort-row">
+            <input v-model="query" type="text" placeholder="Pretraga po ticker-u ili nazivu" class="search-input" />
+            <select v-model="sortBy" class="sort-select">
+              <option value="tickerAsc">Ticker A-Z</option>
+              <option value="nameAsc">Naziv A-Z</option>
+              <option value="priceDesc">Cena opadajuce</option>
+              <option value="priceAsc">Cena rastuce</option>
+              <option value="volumeDesc">Volume opadajuce</option>
+            </select>
+          </div>
+          <div class="range-filters">
+            <div class="range-group">
+              <span class="range-label">Cena</span>
+              <input v-model="priceMin" type="number" placeholder="Min" class="range-input" />
+              <span class="range-sep">–</span>
+              <input v-model="priceMax" type="number" placeholder="Max" class="range-input" />
+            </div>
+            <div class="range-group">
+              <span class="range-label">Ask</span>
+              <input v-model="askMin" type="number" placeholder="Min" class="range-input" />
+              <span class="range-sep">–</span>
+              <input v-model="askMax" type="number" placeholder="Max" class="range-input" />
+            </div>
+            <div class="range-group">
+              <span class="range-label">Bid</span>
+              <input v-model="bidMin" type="number" placeholder="Min" class="range-input" />
+              <span class="range-sep">–</span>
+              <input v-model="bidMax" type="number" placeholder="Max" class="range-input" />
+            </div>
+            <div class="range-group">
+              <span class="range-label">Volume</span>
+              <input v-model="volumeMin" type="number" placeholder="Min" class="range-input" />
+              <span class="range-sep">–</span>
+              <input v-model="volumeMax" type="number" placeholder="Max" class="range-input" />
+            </div>
+            <button v-if="hasActiveFilters" class="clear-filters-btn" @click="clearFilters">Ocisti filtere</button>
+          </div>
         </div>
       </div>
 
@@ -153,6 +224,7 @@ onMounted(async () => {
               <th>Bid</th>
               <th>Tip</th>
               <th>Volume</th>
+              <th>Poc. margin</th>
               <th></th>
             </tr>
           </thead>
@@ -169,6 +241,7 @@ onMounted(async () => {
               <td>{{ formatPrice(listing.bid) }}</td>
               <td><span class="type-pill">{{ listing.type }}</span></td>
               <td>{{ volumeFormatter.format(listing.volume) }}</td>
+              <td class="margin-cost">{{ formatPrice(getInitialMarginCost(listing)) }}</td>
               <td>
                 <RouterLink :to="`/client/securities/${listing.ticker}`" class="details-link">Detalji</RouterLink>
               </td>
@@ -281,21 +354,121 @@ onMounted(async () => {
   font-size: 13px;
 }
 
-.controls-grid {
-  display: grid;
-  grid-template-columns: minmax(240px, 1.4fr) 180px 180px;
+.controls-top {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  width: min(100%, 760px);
+  width: 100%;
 }
 
-.controls-grid input,
-.controls-grid select {
-  width: 100%;
+.tab-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.tab-btn {
+  padding: 8px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  background: #e2e8f0;
+}
+
+.tab-btn.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
+}
+
+.search-sort-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1 1 260px;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.sort-select {
+  width: 200px;
   padding: 10px 14px;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
   font-size: 14px;
   background: #fff;
+}
+
+.range-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.range-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 44px;
+}
+
+.range-sep {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.range-input {
+  width: 84px;
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.range-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.clear-filters-btn {
+  padding: 7px 14px;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clear-filters-btn:hover {
+  background: #fee2e2;
+}
+
+.margin-cost {
+  color: #0369a1;
+  font-weight: 600;
 }
 
 .exchange-grid {

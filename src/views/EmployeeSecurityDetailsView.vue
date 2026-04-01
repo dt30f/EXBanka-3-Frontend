@@ -1,20 +1,115 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useEmployeeMarketStore } from '../stores/employeeMarket'
+import { employeeMarketApi } from '../api/employeeMarket'
+import type { OptionItem } from '../api/market'
+import PriceChart from '../components/PriceChart.vue'
+
+type Period = '1D' | '1W' | '1M' | '3M' | '1Y' | 'Max'
+const PERIODS: Period[] = ['1D', '1W', '1M', '3M', '1Y', 'Max']
 
 const route = useRoute()
 const marketStore = useEmployeeMarketStore()
+const chartPeriod = ref<Period>('1M')
+const refreshing = ref(false)
 
 const ticker = computed(() => String(route.params.ticker || ''))
+
+const priceFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+const volumeFormatter = new Intl.NumberFormat('en-US')
+
+function formatPrice(value: number) {
+  return priceFormatter.format(value)
+}
+
+// Options chain
+const allOptions = ref<OptionItem[]>([])
+const optionsLoading = ref(false)
+const selectedExpiry = ref('')
+const strikeFilter = ref<'all' | 'itm' | 'otm'>('all')
+const stockPriceForOptions = ref(0)
 
 async function loadDetails() {
   if (!ticker.value) return
   await marketStore.fetchListingDetails(ticker.value)
 }
 
-onMounted(loadDetails)
-watch(ticker, loadDetails)
+async function refresh() {
+  refreshing.value = true
+  await loadDetails()
+  refreshing.value = false
+}
+
+async function loadOptions() {
+  if (!ticker.value || marketStore.currentListing?.type !== 'stock') return
+  optionsLoading.value = true
+  try {
+    const res = await employeeMarketApi.getOptionsChain(ticker.value)
+    allOptions.value = res.data.options ?? []
+    stockPriceForOptions.value = res.data.stockPrice
+    if (expiryDates.value.length > 0 && !selectedExpiry.value) {
+      selectedExpiry.value = expiryDates.value[0] ?? ''
+    }
+  } catch {
+    allOptions.value = []
+  } finally {
+    optionsLoading.value = false
+  }
+}
+
+const expiryDates = computed(() => {
+  const dates = new Set<string>(allOptions.value.map((o) => o.settlementDate))
+  return Array.from(dates).sort()
+})
+
+const filteredOptions = computed(() => {
+  const spot = stockPriceForOptions.value
+  return allOptions.value.filter((o) => {
+    if (selectedExpiry.value && o.settlementDate !== selectedExpiry.value) return false
+    if (strikeFilter.value === 'itm') {
+      return (o.optionType === 'CALL' && o.strikePrice < spot) ||
+             (o.optionType === 'PUT' && o.strikePrice > spot)
+    }
+    if (strikeFilter.value === 'otm') {
+      return (o.optionType === 'CALL' && o.strikePrice > spot) ||
+             (o.optionType === 'PUT' && o.strikePrice < spot)
+    }
+    return true
+  })
+})
+
+const chainRows = computed(() => {
+  const byStrike = new Map<number, { call?: OptionItem; put?: OptionItem }>()
+  for (const opt of filteredOptions.value) {
+    const row = byStrike.get(opt.strikePrice) ?? {}
+    if (opt.optionType === 'CALL') row.call = opt
+    else row.put = opt
+    byStrike.set(opt.strikePrice, row)
+  }
+  return Array.from(byStrike.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([strike, sides]) => ({ strike, call: sides.call, put: sides.put }))
+})
+
+function isItm(type: 'CALL' | 'PUT', strike: number): boolean {
+  const spot = stockPriceForOptions.value
+  return type === 'CALL' ? strike < spot : strike > spot
+}
+
+onMounted(async () => {
+  await loadDetails()
+  await loadOptions()
+})
+watch(ticker, async () => {
+  await loadDetails()
+  allOptions.value = []
+  selectedExpiry.value = ''
+  await loadOptions()
+})
 </script>
 
 <template>
@@ -32,7 +127,7 @@ watch(ticker, loadDetails)
           <p>{{ marketStore.currentListing.exchange.name }} | {{ marketStore.currentListing.exchange.currency }}</p>
         </div>
         <div class="hero-price">
-          {{ marketStore.currentListing.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+          {{ formatPrice(marketStore.currentListing.price) }}
           <span>{{ marketStore.currentListing.exchange.currency }}</span>
         </div>
       </div>
@@ -40,15 +135,15 @@ watch(ticker, loadDetails)
       <div class="stats-grid">
         <div class="stat-card">
           <span>Ask</span>
-          <strong>{{ marketStore.currentListing.ask.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</strong>
+          <strong>{{ formatPrice(marketStore.currentListing.ask) }}</strong>
         </div>
         <div class="stat-card">
           <span>Bid</span>
-          <strong>{{ marketStore.currentListing.bid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</strong>
+          <strong>{{ formatPrice(marketStore.currentListing.bid) }}</strong>
         </div>
         <div class="stat-card">
           <span>Volume</span>
-          <strong>{{ marketStore.currentListing.volume.toLocaleString('en-US') }}</strong>
+          <strong>{{ volumeFormatter.format(marketStore.currentListing.volume) }}</strong>
         </div>
         <div class="stat-card">
           <span>Last refresh</span>
@@ -70,11 +165,36 @@ watch(ticker, loadDetails)
 
       <section class="panel">
         <div class="panel-head">
+          <h2>Graf kretanja cene</h2>
+          <div class="chart-controls">
+            <div class="period-bar">
+              <button
+                v-for="p in PERIODS"
+                :key="p"
+                :class="['period-btn', { active: chartPeriod === p }]"
+                @click="chartPeriod = p"
+              >{{ p }}</button>
+            </div>
+            <button class="refresh-btn" :disabled="refreshing" @click="refresh">
+              {{ refreshing ? '...' : 'Osvezi' }}
+            </button>
+          </div>
+        </div>
+        <PriceChart
+          :history="marketStore.currentHistory"
+          :period="chartPeriod"
+          :currency="marketStore.currentListing.exchange.currency ?? ''"
+        />
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
           <h2>Istorija kretanja cene</h2>
           <span>{{ marketStore.currentHistory.length }} dana</span>
         </div>
 
-        <div class="table-wrap">
+        <div v-if="marketStore.currentHistory.length === 0" class="empty-inline">Istorija trenutno nije dostupna.</div>
+        <div v-else class="table-wrap">
           <table class="history-table">
             <thead>
               <tr>
@@ -89,13 +209,72 @@ watch(ticker, loadDetails)
             <tbody>
               <tr v-for="point in marketStore.currentHistory" :key="point.date">
                 <td>{{ point.date }}</td>
-                <td>{{ point.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
-                <td>{{ point.high.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
-                <td>{{ point.low.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</td>
+                <td>{{ formatPrice(point.price) }}</td>
+                <td>{{ formatPrice(point.high) }}</td>
+                <td>{{ formatPrice(point.low) }}</td>
                 <td :class="{ positive: point.change >= 0, negative: point.change < 0 }">
-                  {{ point.change.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                  {{ formatPrice(point.change) }}
                 </td>
-                <td>{{ point.volume.toLocaleString('en-US') }}</td>
+                <td>{{ volumeFormatter.format(point.volume) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <!-- Options chain — only for stocks -->
+      <section v-if="marketStore.currentListing.type === 'stock'" class="panel">
+        <div class="panel-head">
+          <h2>Opcioni lanac</h2>
+          <div class="options-controls">
+            <select v-model="selectedExpiry" class="expiry-select">
+              <option value="">Sve expiry datumi</option>
+              <option v-for="d in expiryDates" :key="d" :value="d">{{ d }}</option>
+            </select>
+            <div class="strike-filter-bar">
+              <button :class="['sf-btn', { active: strikeFilter === 'all' }]" @click="strikeFilter = 'all'">Sve</button>
+              <button :class="['sf-btn', { active: strikeFilter === 'itm' }]" @click="strikeFilter = 'itm'">ITM</button>
+              <button :class="['sf-btn', { active: strikeFilter === 'otm' }]" @click="strikeFilter = 'otm'">OTM</button>
+            </div>
+          </div>
+        </div>
+        <div v-if="optionsLoading" class="empty-inline">Ucitavam opcije...</div>
+        <div v-else-if="allOptions.length === 0" class="empty-inline">Opcioni podaci nisu dostupni.</div>
+        <div v-else-if="chainRows.length === 0" class="empty-inline">Nema opcija za odabrane filtere.</div>
+        <div v-else class="table-wrap">
+          <table class="options-table">
+            <thead>
+              <tr>
+                <th colspan="4" class="calls-header">CALLS</th>
+                <th class="strike-header">STRIKE</th>
+                <th colspan="4" class="puts-header">PUTS</th>
+              </tr>
+              <tr>
+                <th>Bid</th><th>Ask</th><th>IV</th><th>OI</th>
+                <th></th>
+                <th>Bid</th><th>Ask</th><th>IV</th><th>OI</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in chainRows" :key="row.strike">
+                <template v-if="row.call">
+                  <td :class="{ 'itm-cell': isItm('CALL', row.strike), 'otm-cell': !isItm('CALL', row.strike) }">{{ formatPrice(row.call.bid) }}</td>
+                  <td :class="{ 'itm-cell': isItm('CALL', row.strike), 'otm-cell': !isItm('CALL', row.strike) }">{{ formatPrice(row.call.ask) }}</td>
+                  <td :class="{ 'itm-cell': isItm('CALL', row.strike), 'otm-cell': !isItm('CALL', row.strike) }">{{ (row.call.impliedVolatility * 100).toFixed(1) }}%</td>
+                  <td :class="{ 'itm-cell': isItm('CALL', row.strike), 'otm-cell': !isItm('CALL', row.strike) }">{{ row.call.openInterest.toLocaleString('en-US') }}</td>
+                </template>
+                <template v-else>
+                  <td colspan="4" class="no-data-cell">—</td>
+                </template>
+                <td class="strike-cell">{{ formatPrice(row.strike) }}</td>
+                <template v-if="row.put">
+                  <td :class="{ 'itm-cell': isItm('PUT', row.strike), 'otm-cell': !isItm('PUT', row.strike) }">{{ formatPrice(row.put.bid) }}</td>
+                  <td :class="{ 'itm-cell': isItm('PUT', row.strike), 'otm-cell': !isItm('PUT', row.strike) }">{{ formatPrice(row.put.ask) }}</td>
+                  <td :class="{ 'itm-cell': isItm('PUT', row.strike), 'otm-cell': !isItm('PUT', row.strike) }">{{ (row.put.impliedVolatility * 100).toFixed(1) }}%</td>
+                  <td :class="{ 'itm-cell': isItm('PUT', row.strike), 'otm-cell': !isItm('PUT', row.strike) }">{{ row.put.openInterest.toLocaleString('en-US') }}</td>
+                </template>
+                <template v-else>
+                  <td colspan="4" class="no-data-cell">—</td>
+                </template>
               </tr>
             </tbody>
           </table>
@@ -264,6 +443,67 @@ watch(ticker, loadDetails)
   color: #64748b;
 }
 
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.period-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.period-btn {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.period-btn:hover {
+  background: #e2e8f0;
+}
+
+.period-btn.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
+}
+
+.refresh-btn {
+  padding: 6px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.empty-inline {
+  padding: 22px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  text-align: center;
+}
+
 .positive {
   color: #15803d;
   font-weight: 700;
@@ -290,6 +530,107 @@ watch(ticker, loadDetails)
 .error-box {
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.options-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.expiry-select {
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.strike-filter-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.sf-btn {
+  padding: 6px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sf-btn.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
+}
+
+.options-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.options-table th,
+.options-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.options-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.calls-header {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  border-right: 2px solid #e2e8f0;
+}
+
+.puts-header {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border-left: 2px solid #e2e8f0;
+}
+
+.strike-header,
+.strike-cell {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #0f172a;
+  border-left: 2px solid #e2e8f0;
+  border-right: 2px solid #e2e8f0;
+}
+
+.itm-cell {
+  background: rgba(22, 163, 74, 0.06);
+  color: #15803d;
+  font-weight: 600;
+}
+
+.otm-cell {
+  color: #475569;
+}
+
+.no-data-cell {
+  color: #cbd5e1;
+}
+
+.empty-inline {
+  padding: 22px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  text-align: center;
 }
 
 @media (max-width: 900px) {
