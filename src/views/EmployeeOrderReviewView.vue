@@ -22,6 +22,7 @@ const orders = ref<Order[]>([])
 const loading = ref(false)
 const error = ref('')
 const activeTab = ref<TabFilter>('all')
+const hideClients = ref(false)
 
 const actionLoading = ref<Record<number, boolean>>({})
 const actionError = ref<Record<number, string>>({})
@@ -33,14 +34,18 @@ function formatPrice(v: number) { return fmt.format(v) }
 // Computed
 // ---------------------------------------------------------------------------
 
+const visibleOrders = computed(() =>
+  hideClients.value ? orders.value.filter((o) => o.userType !== 'client') : orders.value
+)
+
 const filtered = computed(() => {
-  if (activeTab.value === 'all') return orders.value
-  return orders.value.filter((o) => o.status === activeTab.value)
+  if (activeTab.value === 'all') return visibleOrders.value
+  return visibleOrders.value.filter((o) => o.status === activeTab.value)
 })
 
 const counts = computed(() => {
-  const c: Record<string, number> = { all: orders.value.length }
-  for (const o of orders.value) {
+  const c: Record<string, number> = { all: visibleOrders.value.length }
+  for (const o of visibleOrders.value) {
     c[o.status] = (c[o.status] ?? 0) + 1
   }
   return c
@@ -118,9 +123,17 @@ onMounted(load)
         <h1>Pregled naloga</h1>
         <p>Odobrite, odbijte ili otkažite naloge agenata.</p>
       </div>
-      <button class="refresh-btn" :disabled="loading" @click="load">
-        {{ loading ? '...' : 'Osvezi' }}
-      </button>
+      <div class="header-actions">
+        <button
+          :class="['filter-clients-btn', { active: hideClients }]"
+          @click="hideClients = !hideClients"
+        >
+          {{ hideClients ? 'Prikaži klijente' : 'Sakrij klijente' }}
+        </button>
+        <button class="refresh-btn" :disabled="loading" @click="load">
+          {{ loading ? '...' : 'Osvezi' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="error" class="error-box">{{ error }}</div>
@@ -245,6 +258,30 @@ onMounted(load)
 .page-header p {
   margin: 6px 0 0;
   color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter-clients-btn {
+  padding: 9px 18px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-clients-btn:hover { background: #f1f5f9; }
+.filter-clients-btn.active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
 }
 
 .refresh-btn {

@@ -8,6 +8,8 @@ export interface ExchangeItem {
   currency: string
   timezone: string
   workingHours: string
+  useManualTime: boolean
+  manualTimeOpen: boolean
   enabled: boolean
 }
 

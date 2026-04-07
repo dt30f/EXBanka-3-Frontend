@@ -8,6 +8,11 @@ import type {
 
 export const employeeMarketApi = {
   listExchanges: () => api.get<{ exchanges: ExchangeItem[]; count: number }>('/exchanges'),
+  toggleExchange: (acronym: string, useManualTime: boolean, manualTimeOpen: boolean) =>
+    api.post<{ exchange: string; useManualTime: boolean; manualTimeOpen: boolean; message: string }>(
+      `/exchanges/${acronym}/toggle`,
+      { useManualTime, manualTimeOpen },
+    ),
   listListings: (q = '', type = '') =>
     api.get<{ listings: ListingItem[]; count: number; query: string }>('/listings', {
       params: { q: q || undefined, type: type || undefined },

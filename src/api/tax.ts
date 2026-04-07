@@ -23,7 +23,7 @@ export const clientTaxApi = {
   getSummary(userId: number, period?: string): Promise<{ data: TaxSummary }> {
     const params: Record<string, string> = { userType: 'client' }
     if (period) params.period = period
-    return clientApi.get(`/api/v1/tax/summary/${userId}`, { params })
+    return clientApi.get(`/tax/summary/${userId}`, { params })
   },
 }
 
@@ -48,18 +48,18 @@ export const employeeTaxApi = {
   getSummary(userId: number, userType = 'employee', period?: string): Promise<{ data: TaxSummary }> {
     const params: Record<string, string> = { userType }
     if (period) params.period = period
-    return employeeApi.get(`/api/v1/tax/summary/${userId}`, { params })
+    return employeeApi.get(`/tax/summary/${userId}`, { params })
   },
 
   /** GET /api/v1/tax/records?period=YYYY-MM — supervisor only */
   getAllRecords(period?: string): Promise<{ data: TaxRecord[] }> {
     const params: Record<string, string> = {}
     if (period) params.period = period
-    return employeeApi.get('/api/v1/tax/records', { params })
+    return employeeApi.get('/tax/records', { params })
   },
 
   /** POST /api/v1/tax/collect — supervisor only */
   triggerCollection(period?: string): Promise<{ data: { period: string; users_processed: number; total_collected: number } }> {
-    return employeeApi.post('/api/v1/tax/collect', period ? { period } : {})
+    return employeeApi.post('/tax/collect', period ? { period } : {})
   },
 }

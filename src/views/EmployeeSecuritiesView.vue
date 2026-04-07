@@ -112,7 +112,10 @@ onMounted(async () => {
         <h1>Hartije od vrednosti</h1>
         <p>Pregled berzi i hartija za zaposlene sa traderskim ovlascenjima.</p>
       </div>
-      <RouterLink to="/portfolio" class="portfolio-link">Otvori portfolio</RouterLink>
+      <div class="header-links">
+        <RouterLink to="/exchanges/toggle" class="toggle-link">Testiranje berzi</RouterLink>
+        <RouterLink to="/portfolio" class="portfolio-link">Otvori portfolio</RouterLink>
+      </div>
     </div>
 
     <section class="panel">
@@ -259,6 +262,26 @@ onMounted(async () => {
 .page-header p {
   margin: 8px 0 0;
   color: #64748b;
+}
+
+.header-links {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.toggle-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  text-decoration: none;
+  font-weight: 600;
 }
 
 .portfolio-link {
@@ -421,7 +444,7 @@ onMounted(async () => {
 
 .exchange-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
 }
 
@@ -477,6 +500,7 @@ onMounted(async () => {
 
 .table-wrap {
   overflow-x: auto;
+  min-width: 0;
 }
 
 .market-table {

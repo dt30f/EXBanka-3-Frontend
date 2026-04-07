@@ -234,6 +234,8 @@ function isActive(to: string) {
 
 .emp-main {
   flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
   margin-left: 260px;
   background: #f8fafc;
   min-height: 100vh;
