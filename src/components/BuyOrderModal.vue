@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { clientOrderApi, employeeOrderApi } from '../api/order'
 import type { CreateOrderPayload, OrderType } from '../api/order'
 import { clientAccountApi } from '../api/clientAccount'
@@ -59,6 +59,35 @@ const step = ref<'form' | 'confirm'>('form')
 const submitting = ref(false)
 const errorMsg = ref('')
 
+// Auto-detect order type as the user fills in stop/limit values.
+// Rules:
+//   limitValue only  → Limit Order
+//   stopValue only   → Stop Order
+//   both values      → Stop-Limit Order
+watch(limitValue, (val) => {
+  const hasLimit = val != null && val > 0
+  const hasStop  = stopValue.value != null && stopValue.value > 0
+  if (hasLimit && hasStop) {
+    orderType.value = 'stop_limit'
+  } else if (hasLimit && orderType.value === 'market') {
+    orderType.value = 'limit'
+  } else if (!hasLimit && orderType.value === 'stop_limit') {
+    orderType.value = 'stop'
+  }
+})
+
+watch(stopValue, (val) => {
+  const hasStop  = val != null && val > 0
+  const hasLimit = limitValue.value != null && limitValue.value > 0
+  if (hasStop && hasLimit) {
+    orderType.value = 'stop_limit'
+  } else if (hasStop && orderType.value === 'market') {
+    orderType.value = 'stop'
+  } else if (!hasStop && orderType.value === 'stop_limit') {
+    orderType.value = 'limit'
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Computed
 // ---------------------------------------------------------------------------
@@ -101,31 +130,31 @@ async function loadAccounts() {
       const res = await clientAccountApi.listByClient(clientId)
       const items: any[] = res.data?.accounts ?? res.data ?? []
       accounts.value = items
-        .filter((a: any) => a.currencyKod === 'RSD' && a.status === 'aktivan')
+        .filter((a: any) => a.status === 'aktivan')
         .map((a: any) => ({
           id: Number(a.id),
-          label: `${a.naziv || a.brojRacuna} (RSD ${Number(a.raspolozivoStanje).toFixed(2)})`,
+          label: `${a.naziv || a.brojRacuna} (${a.currencyKod} ${Number(a.raspolozivoStanje).toFixed(2)})`,
           balance: Number(a.raspolozivoStanje),
         }))
     } else {
-      // Employee: search active accounts (filter RSD client-side)
-      const res = await accountApi.listAll({ status: 'aktivan' })
+      // Employee: only bank (firma) accounts — exclude client accounts
+      const res = await accountApi.listAll({ status: 'aktivan', pageSize: 200 })
       const items: any[] = res.data?.accounts ?? res.data?.content ?? res.data ?? []
       accounts.value = items
-        .filter((a: any) => a.currencyKod === 'RSD')
+        .filter((a: any) => (!a.clientId || a.clientId === '0' || a.clientId === 0) && !a.naziv?.toLowerCase().includes('republika'))
         .map((a: any) => ({
           id: Number(a.id),
-          label: `${a.naziv || a.brojRacuna} (RSD ${Number(a.raspolozivoStanje).toFixed(2)})`,
+          label: `${a.naziv || a.brojRacuna} (${a.currencyKod} ${Number(a.raspolozivoStanje).toFixed(2)})`,
           balance: Number(a.raspolozivoStanje),
         }))
     }
-    if (props.preselectedAccountId) {
+    if (props.preselectedAccountId != null && props.preselectedAccountId !== 0) {
       selectedAccountId.value = props.preselectedAccountId
     } else if (accounts.value.length > 0) {
       selectedAccountId.value = accounts.value[0]!.id
     }
   } catch {
-    // Non-fatal — user can still enter account manually if needed
+    // Non-fatal
   } finally {
     accountsLoading.value = false
   }
@@ -255,31 +284,42 @@ onMounted(loadAccounts)
             <input type="number" v-model.number="contractSize" min="1" step="1" />
           </div>
 
-          <!-- Limit value -->
-          <div v-if="needsLimit" class="field">
-            <label>Limit vrednost ({{ listing.exchange.currency }})</label>
+          <!-- Limit value — always shown; entering a value auto-switches to Limit Order -->
+          <div v-if="needsLimit || orderType === 'market'" class="field">
+            <label>Limit vrednost ({{ listing.exchange.currency }}){{ needsLimit ? '' : ' — opciono' }}</label>
             <input type="number" v-model.number="limitValue" min="0.01" step="0.01" placeholder="0.00" />
           </div>
 
-          <!-- Stop value -->
-          <div v-if="needsStop" class="field">
-            <label>Stop vrednost ({{ listing.exchange.currency }})</label>
+          <!-- Stop value — always shown; entering a value auto-switches to Stop Order -->
+          <div v-if="needsStop || orderType === 'market'" class="field">
+            <label>Stop vrednost ({{ listing.exchange.currency }}){{ needsStop ? '' : ' — opciono' }}</label>
             <input type="number" v-model.number="stopValue" min="0.01" step="0.01" placeholder="0.00" />
           </div>
 
           <!-- Account -->
           <div class="field field-full">
-            <label>Račun (RSD)</label>
+            <label>Račun</label>
             <div v-if="accountsLoading" class="loading-hint">Učitavam račune...</div>
-            <select v-else v-model.number="selectedAccountId">
-              <option :value="null" disabled>Izaberite račun</option>
-              <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
-                {{ acc.label }}
-              </option>
-            </select>
-            <p v-if="accounts.length === 0 && !accountsLoading" class="field-hint">
-              Nema aktivnih RSD računa.
-            </p>
+            <template v-else-if="direction === 'sell'">
+              <input
+                type="text"
+                :value="selectedAccount?.label ?? (preselectedAccountId ? `Račun #${preselectedAccountId}` : 'Učitavam...')"
+                disabled
+                class="locked-account-input"
+              />
+              <p class="field-hint-locked">Račun je zaključan na račun korišćen pri kupovini.</p>
+            </template>
+            <template v-else>
+              <select v-model.number="selectedAccountId">
+                <option :value="null" disabled>Izaberite račun</option>
+                <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
+                  {{ acc.label }}
+                </option>
+              </select>
+              <p v-if="accounts.length === 0" class="field-hint">
+                Nema aktivnih računa.
+              </p>
+            </template>
           </div>
 
           <!-- Toggles -->
@@ -484,6 +524,25 @@ onMounted(loadAccounts)
   color: #ef4444;
   margin: 2px 0 0;
 }
+
+.locked-account-input {
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #64748b;
+  background: #f1f5f9;
+  cursor: not-allowed;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.field-hint-locked {
+  font-size: 12px;
+  color: #64748b;
+  margin: 2px 0 0;
+}
+
 
 .loading-hint {
   font-size: 13px;
