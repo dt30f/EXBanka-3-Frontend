@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { clientManagementApi } from '../api/clientManagement'
-import { actuaryApi } from '../api/actuary'
 import { employeeTaxApi, type TaxRecord } from '../api/tax'
 
 // ---------------------------------------------------------------------------
@@ -10,7 +9,7 @@ import { employeeTaxApi, type TaxRecord } from '../api/tax'
 
 interface TaxRow {
   id: string
-  userType: 'client' | 'employee'
+  userType: 'client' | 'bank'
   ime: string
   prezime: string
   unpaidDebt: number
@@ -20,7 +19,7 @@ const rows = ref<TaxRow[]>([])
 const loading = ref(false)
 const error = ref('')
 
-const typeFilter = ref<'all' | 'client' | 'employee'>('all')
+const typeFilter = ref<'all' | 'client' | 'bank'>('all')
 const nameSearch = ref('')
 
 const collecting = ref(false)
@@ -55,14 +54,12 @@ async function loadAll() {
   loading.value = true
   error.value = ''
   try {
-    const [clientRes, actuaryRes, recordsRes] = await Promise.all([
+    const [clientRes, recordsRes] = await Promise.all([
       clientManagementApi.list({ page: 1, pageSize: 1000 }),
-      actuaryApi.list(),
       employeeTaxApi.getAllRecords(currentPeriod),
     ])
 
     const clients = clientRes.data.clients ?? []
-    const actuaries = actuaryRes.data.actuaries ?? []
     const records: TaxRecord[] = Array.isArray(recordsRes.data) ? recordsRes.data : []
 
     // Build debt map: `${userType}:${userId}` → sum of unpaid tax_rsd
@@ -85,15 +82,14 @@ async function loadAll() {
       })
     }
 
-    for (const a of actuaries) {
-      result.push({
-        id: a.employeeId,
-        userType: 'employee',
-        ime: a.ime,
-        prezime: a.prezime,
-        unpaidDebt: debtMap.get(`employee:${a.employeeId}`) ?? 0,
-      })
-    }
+    // Single bank row — all agents share one bank-owned portfolio.
+    result.push({
+      id: '0',
+      userType: 'bank',
+      ime: 'EXBanka',
+      prezime: '',
+      unpaidDebt: debtMap.get('bank:0') ?? 0,
+    })
 
     // Sort: users with debt first, then alphabetically
     result.sort((a, b) => b.unpaidDebt - a.unpaidDebt || a.prezime.localeCompare(b.prezime))
@@ -160,7 +156,7 @@ onMounted(loadAll)
       />
       <div class="type-tabs">
         <button
-          v-for="opt in ([['all','Svi'],['client','Klijenti'],['employee','Aktuari']] as const)"
+          v-for="opt in ([['all','Svi'],['client','Klijenti'],['bank','Banka']] as const)"
           :key="opt[0]"
           class="tab-btn"
           :class="{ active: typeFilter === opt[0] }"
@@ -197,7 +193,7 @@ onMounted(loadAll)
                 <td>{{ row.prezime }}</td>
                 <td>
                   <span class="type-badge" :class="row.userType">
-                    {{ row.userType === 'client' ? 'Klijent' : 'Aktuar' }}
+                    {{ row.userType === 'client' ? 'Klijent' : 'Banka' }}
                   </span>
                 </td>
                 <td>
@@ -350,9 +346,9 @@ onMounted(loadAll)
   color: #2563eb;
 }
 
-.type-badge.employee {
-  background: #f5f3ff;
-  color: #7c3aed;
+.type-badge.bank {
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .debt {

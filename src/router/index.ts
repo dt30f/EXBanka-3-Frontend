@@ -54,7 +54,7 @@ const router = createRouter({
           meta: { employeeTradingOnly: true },
         },
         {
-          path: 'securities/:ticker',
+          path: 'securities/:ticker(.+)',
           component: () => import('../views/EmployeeSecurityDetailsView.vue'),
           meta: { employeeTradingOnly: true },
         },

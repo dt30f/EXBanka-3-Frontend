@@ -5,7 +5,7 @@ import { useMarketStore } from '../../stores/market'
 import type { ListingItem } from '../../api/market'
 
 type SortOption = 'tickerAsc' | 'nameAsc' | 'priceDesc' | 'priceAsc' | 'volumeDesc'
-type TypeTab = 'all' | 'stock' | 'futures'
+type TypeTab = 'all' | 'stock' | 'forex' | 'futures'
 
 const marketStore = useMarketStore()
 const query = ref('')
@@ -32,6 +32,7 @@ const volumeFormatter = new Intl.NumberFormat('en-US')
 function getInitialMarginCost(listing: ListingItem): number {
   switch (listing.type) {
     case 'futures': return listing.price * 0.10
+    case 'forex':   return listing.price * 0.01
     case 'stock':   return listing.price * 0.50
     default:        return listing.price * 0.50
   }
@@ -166,6 +167,7 @@ onMounted(async () => {
           <div class="tab-bar">
             <button :class="['tab-btn', { active: activeTab === 'all' }]" @click="activeTab = 'all'">Sve</button>
             <button :class="['tab-btn', { active: activeTab === 'stock' }]" @click="activeTab = 'stock'">Akcije</button>
+            <button :class="['tab-btn', { active: activeTab === 'forex' }]" @click="activeTab = 'forex'">Forex</button>
             <button :class="['tab-btn', { active: activeTab === 'futures' }]" @click="activeTab = 'futures'">Futures</button>
           </div>
           <div class="search-sort-row">

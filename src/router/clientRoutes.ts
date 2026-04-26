@@ -26,7 +26,7 @@ export const clientRoutes: RouteRecordRaw[] = [
         meta: { clientTradingOnly: true },
       },
       {
-        path: 'securities/:ticker',
+        path: 'securities/:ticker(.+)',
         component: () => import('../views/client/ClientSecurityDetailsView.vue'),
         meta: { clientTradingOnly: true },
       },
