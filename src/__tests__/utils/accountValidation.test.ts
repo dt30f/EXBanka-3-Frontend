@@ -3,15 +3,15 @@ import { validateAccountNumber } from '../../utils/accountValidation'
 
 describe('validateAccountNumber', () => {
   it('returns true for a valid 18-digit account with allowed 111 prefix', () => {
-    expect(validateAccountNumber('111111111111111111')).toBe(true)
+    expect(validateAccountNumber('111000000000000008')).toBe(true)
   })
 
   it('returns true for a valid 18-digit account with allowed 333 prefix', () => {
-    expect(validateAccountNumber('333000140744023911')).toBe(true)
+    expect(validateAccountNumber('333000000000000002')).toBe(true)
   })
 
   it('returns true for a valid 18-digit account with allowed 444 prefix', () => {
-    expect(validateAccountNumber('444000100000000001')).toBe(true)
+    expect(validateAccountNumber('444000000000000019')).toBe(true)
   })
 
   it('returns false when account prefix is not allowed', () => {

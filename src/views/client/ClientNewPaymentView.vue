@@ -46,9 +46,6 @@ const payableAccounts = computed(() =>
   accountStore.accounts.filter(a => a.currencyKod === 'RSD')
 )
 
-const remainingAttempts = computed(() => Math.max(0, maxAttempts - failedAttempts.value))
-void remainingAttempts
-
 const verifyDisabled = computed(() =>
   verificationCode.value.length !== 6 || codeExpired.value || failedAttempts.value >= maxAttempts || paymentStore.loading
 )

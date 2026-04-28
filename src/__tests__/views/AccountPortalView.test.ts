@@ -28,7 +28,9 @@ vi.mock('../../api/account', () => ({
 vi.mock('../../api/clientManagement', () => ({
   clientManagementApi: {
     list: vi.fn().mockResolvedValue({ data: { clients: [], total: '0' } }),
-    get: vi.fn(),
+    get: vi.fn().mockResolvedValue({
+      data: { client: { id: '10', ime: 'Ana', prezime: 'Jović', email: 'ana@example.com' } },
+    }),
     update: vi.fn(),
     updatePermissions: vi.fn(),
   },
@@ -70,6 +72,7 @@ describe('AccountPortalView', () => {
     vi.mocked(accountApi.listAll).mockResolvedValue({
       data: { accounts: mockAccounts, total: '2' },
     })
+    vi.mocked(accountApi.get).mockResolvedValue({ data: { account: mockAccounts[0] } })
     vi.mocked(employeeCardApi.listByAccount).mockResolvedValue({ data: [] })
   })
 
@@ -137,7 +140,7 @@ describe('AccountPortalView', () => {
     await flushPromises()
 
     expect(wrapper.find('.panel-overlay').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Kartice računa')
+    expect(wrapper.text()).toContain('Kartice')
   })
 
   it('shows no-cards message when account has no cards', async () => {

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ClientManagementView from '../../views/ClientManagementView.vue'
-import { useClientStore } from '../../stores/client'
 
 vi.mock('../../api/clientManagement', () => ({
   clientManagementApi: {

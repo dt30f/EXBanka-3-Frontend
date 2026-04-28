@@ -70,7 +70,9 @@ describe('Same-client transfers', () => {
         cy.contains('span', 'Provizija').should('be.visible')
         cy.contains('button', 'Potvrdi transfer').click()
 
-        // Transfer is auto-confirmed (same-client, no mobile OTP needed)
+        cy.contains('p', 'Da li zelite da potvrdite transfer?').should('be.visible')
+        cy.contains('button', /^Da$/).click()
+
         cy.contains('Transfer uspesno realizovan!').should('be.visible')
         cy.contains(testData.purpose).should('be.visible')
         cy.contains('button', 'Novi transfer').should('be.visible')

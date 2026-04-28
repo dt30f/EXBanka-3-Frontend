@@ -145,29 +145,29 @@ describe('ClientPaymentsView', () => {
   it('shows status badges for each payment', async () => {
     const wrapper = mount(ClientPaymentsView)
     await flushPromises()
-    expect(wrapper.text()).toContain('uspesno')
-    expect(wrapper.text()).toContain('u_obradi')
-    expect(wrapper.text()).toContain('stornirano')
+    expect(wrapper.text()).toContain('Uspešno')
+    expect(wrapper.text()).toContain('U obradi')
+    expect(wrapper.text()).toContain('Stornirano')
   })
 
   it('uspesno badge has badge-success class', async () => {
     const wrapper = mount(ClientPaymentsView)
     await flushPromises()
-    const badge = wrapper.findAll('.badge').find(b => b.text() === 'uspesno')
+    const badge = wrapper.findAll('.badge').find(b => b.text() === 'Uspešno')
     expect(badge!.classes()).toContain('badge-success')
   })
 
   it('u_obradi badge has badge-warning class', async () => {
     const wrapper = mount(ClientPaymentsView)
     await flushPromises()
-    const badge = wrapper.findAll('.badge').find(b => b.text() === 'u_obradi')
+    const badge = wrapper.findAll('.badge').find(b => b.text() === 'U obradi')
     expect(badge!.classes()).toContain('badge-warning')
   })
 
   it('stornirano badge has badge-neutral class', async () => {
     const wrapper = mount(ClientPaymentsView)
     await flushPromises()
-    const badge = wrapper.findAll('.badge').find(b => b.text() === 'stornirano')
+    const badge = wrapper.findAll('.badge').find(b => b.text() === 'Stornirano')
     expect(badge!.classes()).toContain('badge-neutral')
   })
 
