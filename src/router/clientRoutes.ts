@@ -36,6 +36,21 @@ export const clientRoutes: RouteRecordRaw[] = [
         meta: { clientTradingOnly: true },
       },
       {
+        path: 'otc',
+        component: () => import('../views/client/ClientOtcPublicStocksView.vue'),
+        meta: { clientTradingOnly: true },
+      },
+      {
+        path: 'otc/offers',
+        component: () => import('../views/client/ClientOtcOffersView.vue'),
+        meta: { clientTradingOnly: true },
+      },
+      {
+        path: 'otc/contracts',
+        component: () => import('../views/client/ClientOtcContractsView.vue'),
+        meta: { clientTradingOnly: true },
+      },
+      {
         path: 'prenos',
         component: () => import('../views/client/ClientPrenosView.vue'),
       },

@@ -13,18 +13,12 @@ const authStore = useClientAuthStore()
 
 const sellModalHolding = ref<Holding | null>(null)
 
-// OTC toggle
-const togglingPublic = ref<Set<number>>(new Set())
-
-async function togglePublic(h: Holding) {
-  togglingPublic.value.add(h.id)
-  try {
-    await clientPortfolioApi.setPublic(h.id, !h.isPublic)
-    await portfolioStore.fetchAll()
-  } finally {
-    togglingPublic.value.delete(h.id)
-  }
-}
+// OTC public quantity foundation for Sprint 6.
+const otcModalHolding = ref<Holding | null>(null)
+const otcPublicQuantity = ref('')
+const otcError = ref('')
+const otcSuccess = ref('')
+const savingOtcQuantity = ref(false)
 
 // Tax section
 const taxSummary = ref<TaxSummary | null>(null)
@@ -56,6 +50,22 @@ const concentrationRatio = computed(() => {
 const formatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 function formatAmount(value: number) { return formatter.format(value) }
 
+function formatQuantity(value: number) {
+  return value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+function getPublicQuantity(h: Holding) {
+  return h.publicQuantity ?? (h.isPublic ? h.quantity : 0)
+}
+
+function getReservedQuantity(h: Holding) {
+  return h.reservedQuantity ?? 0
+}
+
+function getAvailableForOtc(h: Holding) {
+  return h.availableForOtc ?? Math.max(getPublicQuantity(h) - getReservedQuantity(h), 0)
+}
+
 
 function holdingToListing(h: Holding): ListingItem {
   return {
@@ -72,6 +82,51 @@ function holdingToListing(h: Holding): ListingItem {
 }
 
 function openSell(h: Holding) { sellModalHolding.value = h }
+
+function openOtcModal(h: Holding) {
+  otcModalHolding.value = h
+  otcPublicQuantity.value = String(getPublicQuantity(h))
+  otcError.value = ''
+  otcSuccess.value = ''
+}
+
+function closeOtcModal() {
+  otcModalHolding.value = null
+  otcError.value = ''
+}
+
+function validateOtcQuantity(h: Holding) {
+  const value = Number(otcPublicQuantity.value)
+  const reserved = getReservedQuantity(h)
+  if (!Number.isFinite(value) || value < 0) return 'OTC javna kolicina ne moze biti negativna.'
+  if (value > h.quantity) return 'OTC javna kolicina ne moze biti veca od ukupne kolicine.'
+  if (value < reserved) return 'OTC javna kolicina ne moze biti manja od vec rezervisane kolicine.'
+  return ''
+}
+
+async function saveOtcQuantity() {
+  const holding = otcModalHolding.value
+  if (!holding) return
+
+  const validationError = validateOtcQuantity(holding)
+  if (validationError) {
+    otcError.value = validationError
+    return
+  }
+
+  savingOtcQuantity.value = true
+  otcError.value = ''
+  try {
+    await clientPortfolioApi.setPublicQuantity(holding.id, Number(otcPublicQuantity.value))
+    otcSuccess.value = `OTC javna kolicina za ${holding.assetTicker} je azurirana.`
+    closeOtcModal()
+    await portfolioStore.fetchAll()
+  } catch (e: any) {
+    otcError.value = e?.response?.data?.message || 'Nije moguce azurirati OTC javnu kolicinu.'
+  } finally {
+    savingOtcQuantity.value = false
+  }
+}
 
 function onSellSubmitted() {
   sellModalHolding.value = null
@@ -130,6 +185,8 @@ onMounted(() => {
           <span class="panel-meta">{{ portfolioStore.holdings.length }} pozicija</span>
         </div>
 
+        <div v-if="otcSuccess" class="success-box">{{ otcSuccess }}</div>
+
         <div v-if="sortedHoldings.length === 0" class="empty-inline">Nema pozicija za prikaz.</div>
         <div v-else class="table-wrap">
           <table class="portfolio-table">
@@ -143,6 +200,9 @@ onMounted(() => {
                 <th>Current price</th>
                 <th>Market value</th>
                 <th>P/L</th>
+                <th>OTC javno</th>
+                <th>OTC rezervisano</th>
+                <th>OTC dostupno</th>
                 <th></th>
               </tr>
             </thead>
@@ -166,15 +226,17 @@ onMounted(() => {
                   </div>
                   <div class="asset-meta">{{ item.unrealizedPnLPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}%</div>
                 </td>
+                <td>{{ item.assetType === 'stock' ? formatQuantity(getPublicQuantity(item)) : '-' }}</td>
+                <td>{{ item.assetType === 'stock' ? formatQuantity(getReservedQuantity(item)) : '-' }}</td>
+                <td class="available-otc">{{ item.assetType === 'stock' ? formatQuantity(getAvailableForOtc(item)) : '-' }}</td>
                 <td class="action-cell">
                   <button
                     v-if="item.assetType === 'stock'"
                     class="otc-btn"
-                    :class="{ 'otc-active': item.isPublic }"
-                    :disabled="togglingPublic.has(item.id)"
-                    @click="togglePublic(item)"
-                    :title="item.isPublic ? 'OTC: javno — klikni da ukloniš' : 'OTC: privatno — klikni da objaviš'"
-                  >{{ item.isPublic ? 'OTC ✓' : 'OTC' }}</button>
+                    :class="{ 'otc-active': getPublicQuantity(item) > 0 }"
+                    @click="openOtcModal(item)"
+                    title="Podesi koliko akcija je javno dostupno za OTC ponude"
+                  >Podesi OTC</button>
                   <button class="sell-btn" @click="openSell(item)">Prodaj</button>
                 </td>
               </tr>
@@ -215,6 +277,61 @@ onMounted(() => {
         @close="sellModalHolding = null"
         @submitted="onSellSubmitted"
       />
+
+      <div v-if="otcModalHolding" class="modal-backdrop" @click.self="closeOtcModal">
+        <section class="otc-modal">
+          <div class="modal-head">
+            <div>
+              <p class="modal-eyebrow">OTC javni rezim</p>
+              <h2>{{ otcModalHolding.assetTicker }} / {{ otcModalHolding.assetName }}</h2>
+              <span>Ukupno: {{ formatQuantity(otcModalHolding.quantity) }} | Rezervisano: {{ formatQuantity(getReservedQuantity(otcModalHolding)) }}</span>
+            </div>
+            <button class="close-btn" @click="closeOtcModal">x</button>
+          </div>
+
+          <form class="otc-form" @submit.prevent="saveOtcQuantity">
+            <label>
+              Kolicina javno dostupna za OTC
+              <input
+                v-model="otcPublicQuantity"
+                type="number"
+                min="0"
+                :max="otcModalHolding.quantity"
+                step="0.0001"
+                required
+              />
+            </label>
+
+            <div class="otc-preview">
+              <div>
+                <span>Privatno ostaje</span>
+                <strong>{{ formatQuantity(Math.max(otcModalHolding.quantity - Number(otcPublicQuantity || 0), 0)) }}</strong>
+              </div>
+              <div>
+                <span>Slobodno za nove ponude</span>
+                <strong>{{ formatQuantity(Math.max(Number(otcPublicQuantity || 0) - getReservedQuantity(otcModalHolding), 0)) }}</strong>
+              </div>
+              <div>
+                <span>Valuta</span>
+                <strong>{{ otcModalHolding.currency }}</strong>
+              </div>
+            </div>
+
+            <p class="otc-note">
+              Vec rezervisana kolicina ostaje zakljucana do isteka ili buduceg izvrsenja ugovora.
+            </p>
+
+            <div v-if="otcError" class="error-box modal-error">{{ otcError }}</div>
+
+            <div class="modal-actions">
+              <button type="button" class="secondary-btn" @click="closeOtcModal">Odustani</button>
+              <button type="submit" class="submit-btn" :disabled="savingOtcQuantity">
+                {{ savingOtcQuantity ? 'Cuvam...' : 'Sacuvaj OTC kolicinu' }}
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
     </template>
   </div>
 </template>
@@ -368,6 +485,7 @@ onMounted(() => {
 
 .positive { color: #15803d; font-weight: 700; }
 .negative { color: #b91c1c; font-weight: 700; }
+.available-otc { color: #047857; font-weight: 700; }
 
 .type-badge {
   display: inline-block;
@@ -410,6 +528,16 @@ onMounted(() => {
 .error-box {
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.success-box {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
 }
 
 .empty-inline {
@@ -494,4 +622,138 @@ onMounted(() => {
 }
 
 .action-cell { white-space: nowrap; }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.otc-modal {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+  padding: 24px;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.modal-head span {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+}
+
+.modal-eyebrow {
+  margin: 0 0 6px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.otc-form {
+  display: grid;
+  gap: 16px;
+}
+
+.otc-form label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.otc-form input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #0f172a;
+  font: inherit;
+}
+
+.otc-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.otc-preview span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.otc-preview strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+}
+
+.otc-note {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.modal-error {
+  margin: 0;
+  padding: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.submit-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.submit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 </style>
