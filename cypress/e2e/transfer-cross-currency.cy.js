@@ -80,7 +80,9 @@ describe('Cross-currency transfer', () => {
         cy.contains('span', 'Kurs').should('be.visible')
         cy.contains('button', 'Potvrdi transfer').click()
 
-        // Transfer is auto-confirmed (same-client, no mobile OTP needed)
+        cy.contains('p', 'Da li zelite da potvrdite transfer?').should('be.visible')
+        cy.contains('button', /^Da$/).click()
+
         cy.contains('Transfer uspesno realizovan!').should('be.visible')
       })
   })
