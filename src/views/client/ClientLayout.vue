@@ -50,6 +50,14 @@ function isPaymentSection() {
           <span class="sidebar-icon">$</span><span>Portfolio</span>
         </RouterLink>
 
+        <RouterLink v-if="canAccessMarket" to="/client/otc" class="sidebar-link" :class="{ active: isActive('/client/otc') }">
+          <span class="sidebar-icon">OT</span><span>OTC portal</span>
+        </RouterLink>
+
+        <RouterLink v-if="canAccessMarket" to="/client/otc/offers" class="sidebar-sublink" :class="{ active: isActive('/client/otc/offers') }">
+          OTC ponude
+        </RouterLink>
+
         <RouterLink to="/client/transfers" class="sidebar-link" :class="{ active: isActive('/client/transfers') }">
           <span class="sidebar-icon">&lt;&gt;</span><span>Transferi</span>
         </RouterLink>

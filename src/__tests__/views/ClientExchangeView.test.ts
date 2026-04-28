@@ -98,14 +98,13 @@ describe('ClientExchangeView', () => {
     expect(wrapper.text()).toContain('Kalkulator konverzije')
   })
 
-  it('renders currency dropdowns with all 8 currencies', async () => {
+  it('renders currency dropdowns with currencies from loaded rates', async () => {
     const wrapper = mount(ClientExchangeView)
     await flushPromises()
     const selects = wrapper.findAll('select')
     expect(selects).toHaveLength(2)
-    // Each select has 8 currency options
-    expect(selects[0].findAll('option')).toHaveLength(8)
-    expect(selects[1].findAll('option')).toHaveLength(8)
+    expect(selects[0].findAll('option')).toHaveLength(3)
+    expect(selects[1].findAll('option')).toHaveLength(3)
   })
 
   it('Izračunaj button is disabled when amount is empty', async () => {

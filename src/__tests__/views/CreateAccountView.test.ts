@@ -12,7 +12,18 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 vi.mock('../../api/account', () => ({
-  accountApi: { create: vi.fn() },
+  accountApi: {
+    create: vi.fn(),
+    listCurrencies: vi.fn().mockResolvedValue({
+      data: {
+        currencies: [
+          { id: 1, kod: 'RSD', naziv: 'Serbian Dinar', aktivan: true },
+          { id: 2, kod: 'EUR', naziv: 'Euro', aktivan: true },
+          { id: 3, kod: 'USD', naziv: 'US Dollar', aktivan: true },
+        ],
+      },
+    }),
+  },
   CURRENCIES: [
     { id: 1, kod: 'RSD', naziv: 'Serbian Dinar' },
     { id: 2, kod: 'EUR', naziv: 'Euro' },
@@ -26,6 +37,14 @@ vi.mock('../../components/ClientSelectDialog.vue', () => ({
 
 vi.mock('../../api/clientManagement', () => ({
   clientManagementApi: { list: vi.fn(), get: vi.fn(), update: vi.fn(), create: vi.fn() },
+}))
+
+vi.mock('../../api/client', () => ({
+  default: {
+    get: vi.fn().mockResolvedValue({ data: { sifre: [] } }),
+    post: vi.fn(),
+    interceptors: { request: { use: vi.fn() } },
+  },
 }))
 
 describe('CreateAccountView', () => {
@@ -83,10 +102,16 @@ describe('CreateAccountView', () => {
     expect(wrapper.find('input[placeholder="npr. Firma DOO"]').exists()).toBe(false)
   })
 
-  it('renders disabled card checkbox (Sprint 2 guardrail)', () => {
+  it('allows card issuance only for checking accounts', async () => {
     const wrapper = mount(CreateAccountView)
     const cardCheckbox = wrapper.find('#card-checkbox')
     expect(cardCheckbox.exists()).toBe(true)
+    expect((cardCheckbox.element as HTMLInputElement).disabled).toBe(false)
+
+    const devizniRadio = wrapper.findAll('input[type="radio"]').find(r => r.element.value === 'devizni')
+    await devizniRadio!.setValue('devizni')
+    await devizniRadio!.trigger('change')
+
     expect((cardCheckbox.element as HTMLInputElement).disabled).toBe(true)
   })
 
@@ -118,6 +143,7 @@ describe('CreateAccountView', () => {
     })
 
     const wrapper = mount(CreateAccountView)
+    await flushPromises()
 
     // Simulate client selection via component internals
     wrapper.vm.selectedClientId = '1'

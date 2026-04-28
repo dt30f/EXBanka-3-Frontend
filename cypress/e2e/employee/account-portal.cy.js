@@ -58,7 +58,8 @@ describe('Employee: Account portal with cards', () => {
 
         // Open cards panel
         cy.contains('code', testData.account.brojRacuna).closest('tr').click()
-        cy.contains('Kartice računa').should('be.visible')
+        cy.contains('Detalji računa').should('be.visible')
+        cy.contains('Kartice').should('be.visible')
 
         // Card info
         cy.get('.card-row-number').should('be.visible')
