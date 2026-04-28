@@ -151,7 +151,7 @@ describe('ClientRecipientsView', () => {
     await wrapper.findAll('button').find(b => b.text() === 'Potvrdi')!.trigger('click')
     await flushPromises()
 
-    expect(recipientApi.update).toHaveBeenCalledWith('1', 'Ana Izmenjeno', '111111111111111111')
+    expect(recipientApi.update).toHaveBeenCalledWith('1', '5', 'Ana Izmenjeno', '111111111111111111')
     expect(wrapper.find('.rcp-overlay').exists()).toBe(false)
   })
 
@@ -182,7 +182,7 @@ describe('ClientRecipientsView', () => {
     await confirmBtn!.trigger('click')
     await flushPromises()
 
-    expect(recipientApi.delete).toHaveBeenCalledWith('1')
+    expect(recipientApi.delete).toHaveBeenCalledWith('1', '5')
   })
 
   it('cancel delete closes confirmation without calling API', async () => {

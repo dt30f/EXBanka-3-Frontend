@@ -16,7 +16,20 @@ DELETE FROM clients WHERE email LIKE 'cypress.%@example.com';
 
 export function cleanupCypressData() {
   try {
-    execSync(`docker exec exbanka-postgres-1 psql -U postgres -d bankdb -c "${SQL}"`, {
+    const container = execSync('docker compose -f ../docker-compose.yml ps -q postgres', {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim() || execSync('docker ps --filter "name=postgres" --format "{{.Names}}"', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim().split(/\r?\n/)[0]
+
+    if (!container) {
+      throw new Error('Postgres container was not found')
+    }
+
+    execSync(`docker exec ${container} psql -U postgres -d bankdb -c "${SQL}"`, {
       stdio: 'pipe',
     })
     console.log('[db-cleanup] Cypress test data removed from DB.')

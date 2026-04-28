@@ -7,6 +7,6 @@ describe('Employee login', () => {
 
     cy.url().should('not.include', '/login')
     cy.contains('Klijenti').should('be.visible')
-    cy.contains('Računi').should('be.visible')
+    cy.contains('Racuni').should('be.visible')
   })
 })

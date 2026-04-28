@@ -3,7 +3,6 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ClientTransfersView from '../../views/client/ClientTransfersView.vue'
 import { useClientAuthStore } from '../../stores/clientAuth'
-import { useClientAccountStore } from '../../stores/clientAccount'
 
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
@@ -21,6 +20,9 @@ vi.mock('../../api/transfer', () => ({
     listByClient: vi.fn(),
     listByAccount: vi.fn(),
     calculateExchange: vi.fn(),
+    preview: vi.fn(),
+    approve: vi.fn(),
+    reject: vi.fn(),
   },
 }))
 
@@ -82,6 +84,19 @@ describe('ClientTransfersView', () => {
     vi.mocked(transferApi.listByClient).mockResolvedValue({
       data: { transfers: mockTransfers, total: 1 },
     })
+
+    vi.mocked(transferApi.preview).mockResolvedValue({
+      data: {
+        preview: {
+          valutaIznosa: 'RSD',
+          konvertovaniIznos: 1000,
+          kurs: 1,
+          provizija: 0,
+        },
+      },
+    })
+    vi.mocked(transferApi.approve).mockResolvedValue({})
+    vi.mocked(transferApi.reject).mockResolvedValue({})
   })
 
   it('renders Novi transfer heading', async () => {
@@ -110,7 +125,7 @@ describe('ClientTransfersView', () => {
     const wrapper = mount(ClientTransfersView)
     await flushPromises()
     expect(wrapper.text()).toContain('Kirija')
-    expect(wrapper.text()).toContain('Uspešno')
+    expect(wrapper.text()).toContain('Uspesno')
   })
 
   it('shows empty state when no transfers', async () => {
@@ -153,7 +168,7 @@ describe('ClientTransfersView', () => {
     expect(wrapper.text()).toContain('Potvrdi transfer')
   })
 
-  it('after Potvrdi the verify step is shown with code input', async () => {
+  it('after Potvrdi the approval step is shown', async () => {
     vi.mocked(transferApi.create).mockResolvedValueOnce({
       data: { transfer: { ...mockTransfers[0], status: 'u_obradi' } },
     })
@@ -174,17 +189,13 @@ describe('ClientTransfersView', () => {
     await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('verifikacioni kod')
+    expect(wrapper.text()).toContain('Da li zelite da potvrdite transfer?')
   })
 
   it('shows success after valid verification code is submitted', async () => {
     vi.mocked(transferApi.create).mockResolvedValueOnce({
       data: { transfer: { ...mockTransfers[0], status: 'u_obradi' } },
     })
-    vi.mocked(transferApi.verify).mockResolvedValueOnce({
-      data: { id: '1', status: 'uspesno' },
-    })
-
     const wrapper = mount(ClientTransfersView)
     await flushPromises()
 
@@ -201,16 +212,14 @@ describe('ClientTransfersView', () => {
     await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
     await flushPromises()
 
-    // Enter 6-digit verification code
-    const codeInput = wrapper.find('input[maxlength="6"]')
-    await codeInput.setValue('123456')
-    await wrapper.findAll('button').find(b => b.text().includes('Verifikuj'))!.trigger('click')
+    await wrapper.findAll('button').find(b => b.text() === 'Da')!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('uspešno realizovan')
+    expect(transferApi.approve).toHaveBeenCalledWith('1')
+    expect(wrapper.text()).toContain('uspesno realizovan')
   })
 
-  it('verify step shows remaining attempts starting at 3', async () => {
+  it('approval step lets the client reject the prepared transfer', async () => {
     vi.mocked(transferApi.create).mockResolvedValueOnce({
       data: { transfer: { ...mockTransfers[0], status: 'u_obradi' } },
     })
@@ -231,12 +240,19 @@ describe('ClientTransfersView', () => {
     await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Preostalo pokušaja: 3')
+    await wrapper.findAll('button').find(b => b.text() === 'Ne')!.trigger('click')
+    await flushPromises()
+
+    expect(transferApi.reject).toHaveBeenCalledWith('1')
+    expect(wrapper.text()).toContain('Novi transfer')
   })
 
-  it('verify step shows countdown timer starting at 5:00', async () => {
+  it('approval step surfaces approve failures', async () => {
     vi.mocked(transferApi.create).mockResolvedValueOnce({
       data: { transfer: { ...mockTransfers[0], status: 'u_obradi' } },
+    })
+    vi.mocked(transferApi.approve).mockRejectedValueOnce({
+      response: { data: { message: 'Potvrda nije uspela' } },
     })
 
     const wrapper = mount(ClientTransfersView)
@@ -255,6 +271,9 @@ describe('ClientTransfersView', () => {
     await wrapper.findAll('button').find(b => b.text().includes('Potvrdi'))!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('5:00')
+    await wrapper.findAll('button').find(b => b.text() === 'Da')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Potvrda nije uspela')
   })
 })

@@ -69,7 +69,7 @@ async function openEdit(emp: EmployeeListItem) {
   try {
     const res = await employeeApi.get(emp.id)
     editingEmployee.value = res.data.employee
-  } catch (e: any) {
+  } catch {
     error.value = 'Failed to load employee details.'
   }
 }

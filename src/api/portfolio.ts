@@ -23,6 +23,9 @@ export interface Holding {
   unrealizedPnLPct: number
   realizedProfit: number
   isPublic: boolean
+  publicQuantity: number
+  reservedQuantity: number
+  availableForOtc: number
   accountId: number
   createdAt: string
 }
@@ -62,6 +65,15 @@ export const clientPortfolioApi = {
       `/portfolio/holdings/${id}/public`,
       { isPublic }
     ),
+
+  setPublicQuantity: (id: number, publicQuantity: number) =>
+    clientApi.put<{
+      holdingId: number
+      isPublic: boolean
+      publicQuantity: number
+      reservedQuantity: number
+      availableForOtc: number
+    }>(`/portfolio/holdings/${id}/public`, { publicQuantity }),
 }
 
 // ---------------------------------------------------------------------------
@@ -87,4 +99,13 @@ export const employeePortfolioApi = {
       `/portfolio/holdings/${id}/public`,
       { isPublic }
     ),
+
+  setPublicQuantity: (id: number, publicQuantity: number) =>
+    employeeApi.put<{
+      holdingId: number
+      isPublic: boolean
+      publicQuantity: number
+      reservedQuantity: number
+      availableForOtc: number
+    }>(`/portfolio/holdings/${id}/public`, { publicQuantity }),
 }

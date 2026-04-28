@@ -46,13 +46,13 @@ const mockAccounts = [
 ]
 
 const mockRecipients = [
-  { id: '10', clientId: '5', naziv: 'EPS', brojRacuna: '333000140744023911' },
+  { id: '10', clientId: '5', naziv: 'EPS', brojRacuna: '333000000000000002' },
 ]
 
 const mockPayment = {
   id: 'p1',
   racunPosiljaocaId: '1',
-  racunPrimaocaBroj: '333000140744023911',
+  racunPrimaocaBroj: '333000000000000002',
   iznos: 5000,
   sifraPlacanja: '289',
   pozivNaBroj: '',
@@ -137,7 +137,7 @@ describe('ClientNewPaymentView', () => {
     await flushPromises()
 
     await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
-    expect(wrapper.text()).toContain('Izaberite račun platioca')
+    expect(wrapper.text()).toContain('Izaberite racun platioca')
   })
 
   it('moves to confirm step when form is filled', async () => {
@@ -158,7 +158,7 @@ describe('ClientNewPaymentView', () => {
     await wrapper.findAll('button').find(b => b.text() === 'Nastavi')!.trigger('click')
 
     expect(wrapper.text()).toContain('Pregled naloga')
-    expect(wrapper.text()).toContain('333000140744023911')
+    expect(wrapper.text()).toContain('333000000000000002')
     expect(wrapper.text()).toContain('Struja')
   })
 
@@ -185,7 +185,7 @@ describe('ClientNewPaymentView', () => {
 
     expect(paymentApi.create).toHaveBeenCalledOnce()
     expect(wrapper.text()).toContain('Verifikacija')
-    expect(wrapper.text()).toContain('6-cifreni')
+    expect(wrapper.text()).toContain('Potvrdi kod')
   })
 
   it('verify step shows countdown timer starting at 5:00', async () => {
@@ -281,7 +281,7 @@ describe('ClientNewPaymentView', () => {
     await selects[2].setValue('1')
 
     await wrapper.findAll('button').find(b => b.text() === 'Ručni unos')!.trigger('click')
-    await wrapper.find('input[placeholder="Broj računa primaoca (18 cifara)"]').setValue('333000140744023911')
+    await wrapper.find('input[placeholder="Broj računa primaoca (18 cifara)"]').setValue('333000000000000002')
     await wrapper.find('input[type="number"]').setValue('1000')
     await wrapper.find('input[placeholder="Svrha plaćanja"]').setValue('Test')
 
